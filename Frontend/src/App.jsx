@@ -1,57 +1,58 @@
+import React from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
-import Homepage from './pages/Homepage'
+import Home from './pages/Home'
 import Footer from './components/Footer'
 import Navbar from './components/Navbar'
+import Events from './pages/Events'
+import EventDetails from './pages/EventDetails'
+import Groups from './pages/Groups'
+import GroupDetails from './pages/GroupDetails'
+import MyDashboard from './pages/MyDashboard'
+import { Toaster } from 'react-hot-toast'
 
 const App = () => {
-  const isAdminRoute = useLocation().pathname.startsWith('/admin')
 
-  return (
+	const isAdminRoute = useLocation().pathname.startsWith('/admin')
+
+	return (
     <>
-      <Navbar/>
-      <Routes>
-        <Route path='/' element={<Homepage />} />
-      </Routes>
-      <Footer/>
+      <Toaster />
+        {!isAdminRoute && <Navbar/>}
+        <Routes>
+          <Route path='/' element={<Home/>} />
+          <Route path='/events' element={<Events/>} />
+          <Route path='/events/:id' element={<EventDetails/>} />
+          <Route path='/groups' element={<Groups/>} />
+          <Route path='/groups/:id' element={<GroupDetails/>} />
+          <Route path='/my-dashboard' element={<MyDashboard/>} />
+        </Routes>
+          {!isAdminRoute && <Footer />}
     </>
-  )
+	)
 }
+
 export default App
 
 
 
-// import { useState } from 'react'
-// import reactLogo from './assets/react.svg'
-// import viteLogo from '/vite.svg'
-// import './App.css'
 
-// function App() {
-//   const [count, setCount] = useState(0)
+// import { Routes, Route, useLocation } from 'react-router-dom'
+// import Home from './pages/Home'
+// import Footer from './components/Footer'
+// import Navbar from './components/Navbar'
+
+// const App = () => {
+//   const isAdminRoute = useLocation().pathname.startsWith('/admin')
 
 //   return (
 //     <>
-//       <div>
-//         <a href="https://vite.dev" target="_blank">
-//           <img src={viteLogo} className="logo" alt="Vite logo" />
-//         </a>
-//         <a href="https://react.dev" target="_blank">
-//           <img src={reactLogo} className="logo react" alt="React logo" />
-//         </a>
-//       </div>
-//       <h1>Vite + React</h1>
-//       <div className="card">
-//         <button onClick={() => setCount((count) => count + 1)}>
-//           count is {count}
-//         </button>
-//         <p>
-//           Edit <code>src/App.jsx</code> and save to test HMR
-//         </p>
-//       </div>
-//       <p className="read-the-docs">
-//         Click on the Vite and React logos to learn more
-//       </p>
+//       <Navbar/>
+//       <Routes>
+//         <Route path='/' element={<Home />} />
+//       </Routes>
+//       <Footer/>
 //     </>
 //   )
 // }
-
 // export default App
+
