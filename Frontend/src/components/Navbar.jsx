@@ -1,7 +1,8 @@
+// Navbar.jsx
 import React, { useState, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { assets } from '../assets/assets'
-import { Menu, Search, X, Bell } from 'lucide-react'
+import { Menu, Search, X, Bell, LayoutDashboard, MessageSquare } from 'lucide-react'
 import {
   Box,
   Flex,
@@ -11,6 +12,13 @@ import {
   Link as ChakraLink,
   Text,
 } from '@chakra-ui/react'
+import {
+  SignedIn,
+  SignedOut,
+  UserButton,
+  useUser,
+  useClerk,
+} from '@clerk/clerk-react'
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false)
@@ -18,6 +26,9 @@ const Navbar = () => {
   const [aura, setAura] = useState({ x: 0, y: 0, visible: false })
 
   const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const { user } = useUser()
+  const { openSignIn } = useClerk()
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50)
@@ -34,11 +45,23 @@ const Navbar = () => {
     })
   }
 
-  // active color helper
   const linkColor = (path) =>
     (path === '/' ? pathname === '/' : pathname.startsWith(path))
       ? '#EC4899'
       : 'gray.700'
+
+  // Shared Clerk UserButton appearance for consistent hover styling
+  const clerkAppearance = {
+    elements: {
+      userButtonAvatarBox: { width: 36, height: 36 },
+      userButtonPopoverActionButton: {
+        transition: 'background-color 0.2s ease',
+        '&:hover': {
+          backgroundColor: '#FCE7F3', // light pink hover
+        },
+      },
+    },
+  }
 
   return (
     <Box
@@ -53,17 +76,10 @@ const Navbar = () => {
       transition="background-color 0.3s ease"
     >
       <Flex align="center" justify="space-between">
-        {/* Logo + Brand Name */}
+        {/* Logo */}
         <Link to="/">
           <Flex align="center" gap={2}>
-            <Box
-              as="img"
-              src={assets.logo}
-              alt="Logo"
-              w="50px"
-              h="auto"
-              mt={-1.5}
-            />
+            <Box as="img" src={assets.logo} alt="Logo" w="50px" h="auto" mt={-1.5} />
             <Text
               fontFamily="'Inter', sans-serif"
               fontWeight="700"
@@ -77,7 +93,7 @@ const Navbar = () => {
           </Flex>
         </Link>
 
-        {/* Desktop Navigation (glass + aura + active pink) */}
+        {/* Desktop Nav */}
         <HStack
           display={{ base: 'none', md: 'flex' }}
           gap={8}
@@ -95,7 +111,6 @@ const Navbar = () => {
           onMouseEnter={() => setAura((a) => ({ ...a, visible: true }))}
           onMouseLeave={() => setAura((a) => ({ ...a, visible: false }))}
         >
-          {/* Aura layer */}
           <Box
             pointerEvents="none"
             position="absolute"
@@ -117,20 +132,15 @@ const Navbar = () => {
               as={Link}
               to={path}
               onClick={() => scrollTo(0, 0)}
-              color={linkColor(path)} // pink when active, gray otherwise
-              _hover={{ textDecoration: 'none', color: '#EC4899' }} // stays pink on hover
-              _focus={{ boxShadow: 'none', outline: 'none' }}       // remove gray outline
-              _focusVisible={{ boxShadow: 'none', outline: 'none' }}// remove gray outline
-              _active={{ boxShadow: 'none', outline: 'none' }}      // remove gray outline
-              position="relative"
-              zIndex={1}
+              color={linkColor(path)}
+              _hover={{ textDecoration: 'none', color: '#EC4899' }}
             >
               {label}
             </ChakraLink>
           ))}
         </HStack>
 
-        {/* Mobile Navigation Overlay */}
+        {/* Mobile Nav Overlay */}
         <Box
           display={{ base: isOpen ? 'flex' : 'none', md: 'none' }}
           position="fixed"
@@ -156,8 +166,6 @@ const Navbar = () => {
             variant="ghost"
             color="#99A0A8"
             aria-label="Close menu"
-            _focus={{ boxShadow: 'none' }}
-            _focusVisible={{ boxShadow: 'none' }}
           >
             <X size={22} />
           </IconButton>
@@ -177,16 +185,46 @@ const Navbar = () => {
               }}
               color={linkColor(path)}
               _hover={{ textDecoration: 'none', color: '#EC4899' }}
-              _focus={{ boxShadow: 'none', outline: 'none' }}
-              _focusVisible={{ boxShadow: 'none', outline: 'none' }}
-              _active={{ boxShadow: 'none', outline: 'none' }}
             >
               {label}
             </ChakraLink>
           ))}
+
+          {/* Mobile Auth Area */}
+          <SignedOut>
+            <Button
+              onClick={() => openSignIn()}
+              px={{ base: 4, sm: 6 }}
+              py={{ base: 1, sm: 1.5 }}
+              bg="#EC4899"
+              color="white"
+              borderRadius="full"
+              fontWeight="medium"
+              _hover={{ bg: '#C7327C' }}
+            >
+              Login
+            </Button>
+          </SignedOut>
+
+          <SignedIn>
+            <UserButton appearance={clerkAppearance}>
+              <UserButton.MenuItems>
+                <UserButton.Action
+                  label="My Dashboard"
+                  labelIcon={<LayoutDashboard size={15} />}
+                  onClick={() => navigate('/dashboard')}
+                />
+                <UserButton.Action
+                  label="Messages"
+                  labelIcon={<MessageSquare size={15} />}
+                  onClick={() => navigate('/messages')}
+                />
+              </UserButton.MenuItems>
+            </UserButton>
+          </SignedIn>
         </Box>
 
-        {/* Right side actions */}
+        {/* Right Side Buttons */}
         <Flex align="center" gap={5}>
           <IconButton
             display={{ base: 'none', md: 'inline-flex' }}
@@ -194,8 +232,6 @@ const Navbar = () => {
             color="#99A0A8"
             aria-label="Search"
             _hover={{ bg: 'gray.100' }}
-            _focus={{ boxShadow: 'none' }}
-            _focusVisible={{ boxShadow: 'none' }}
           >
             <Search size={20} />
           </IconButton>
@@ -206,28 +242,44 @@ const Navbar = () => {
             color="#99A0A8"
             aria-label="Notifications"
             _hover={{ bg: 'gray.100' }}
-            _focus={{ boxShadow: 'none' }}
-            _focusVisible={{ boxShadow: 'none' }}
           >
             <Bell size={20} />
           </IconButton>
 
-          <Button
-            px={{ base: 4, sm: 6 }}
-            py={{ base: 1, sm: 1.5 }}
-            bg="#EC4899"
-            color="white"
-            borderRadius="full"
-            fontWeight="medium"
-            _hover={{ bg: '#C7327C' }}
-            _focus={{ boxShadow: 'none' }}
-            _focusVisible={{ boxShadow: 'none' }}
-          >
-            Login
-          </Button>
+          <SignedOut>
+            <Button
+              px={{ base: 4, sm: 6 }}
+              py={{ base: 1, sm: 1.5 }}
+              bg="#EC4899"
+              color="white"
+              borderRadius="full"
+              fontWeight="medium"
+              _hover={{ bg: '#C7327C' }}
+              onClick={() => openSignIn()}
+            >
+              Login
+            </Button>
+          </SignedOut>
+
+          <SignedIn>
+            <UserButton appearance={clerkAppearance}>
+              <UserButton.MenuItems>
+                <UserButton.Action
+                  label="My Dashboard"
+                  labelIcon={<LayoutDashboard size={15} />}
+                  onClick={() => navigate('/dashboard')}
+                />
+                <UserButton.Action
+                  label="Messages"
+                  labelIcon={<MessageSquare size={15} />}
+                  onClick={() => navigate('/messages')}
+                />
+              </UserButton.MenuItems>
+            </UserButton>
+          </SignedIn>
         </Flex>
 
-        {/* Mobile menu button */}
+        {/* Mobile Menu Button */}
         <IconButton
           display={{ base: 'inline-flex', md: 'none' }}
           ml={3}
@@ -236,8 +288,6 @@ const Navbar = () => {
           color="#99A0A8"
           aria-label="Open menu"
           _hover={{ bg: 'gray.100' }}
-          _focus={{ boxShadow: 'none' }}
-          _focusVisible={{ boxShadow: 'none' }}
         >
           <Menu size={22} />
         </IconButton>
