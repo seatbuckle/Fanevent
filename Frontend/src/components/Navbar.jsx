@@ -36,6 +36,28 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Add custom CSS for Messages button hover
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.innerHTML = `
+      /* Pink hover for Messages button - target by icon SVG */
+      button[class*="userButtonPopoverActionButton"]:has(svg[class*="message-square"]):hover,
+      button[class*="userButtonPopoverActionButton"]:has(svg[data-lucide="message-square"]):hover {
+        background-color: #FCE7F3 !important;
+      }
+      
+      /* Alternative: target by button content */
+      div[class*="userButtonPopoverActions"] button:hover:has([class*="message"]) {
+        background-color: #FCE7F3 !important;
+      }
+    `
+    document.head.appendChild(style)
+    
+    return () => {
+      document.head.removeChild(style)
+    }
+  }, [])
+
   const handleAuraMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
     setAura({
@@ -50,15 +72,19 @@ const Navbar = () => {
       ? '#EC4899'
       : 'gray.700'
 
-  // Shared Clerk UserButton appearance for consistent hover styling
+  // 🔧 Clerk dropdown hover styling
   const clerkAppearance = {
     elements: {
-      userButtonAvatarBox: { width: 36, height: 36 },
       userButtonPopoverActionButton: {
         transition: 'background-color 0.2s ease',
-        '&:hover': {
-          backgroundColor: '#FCE7F3', // light pink hover
-        },
+      },
+      // Pink hover for Manage Account (Clerk built-in button)
+      userButtonPopoverActionButton__manageAccount: {
+        '&:hover': { backgroundColor: '#FCE7F3' },
+      },
+      // Neutral gray for Sign Out
+      userButtonPopoverActionButton__signOut: {
+        '&:hover': { backgroundColor: '#F5F5F5' },
       },
     },
   }
@@ -93,7 +119,7 @@ const Navbar = () => {
           </Flex>
         </Link>
 
-        {/* Desktop Nav */}
+        {/* Desktop Navigation */}
         <HStack
           display={{ base: 'none', md: 'flex' }}
           gap={8}
@@ -110,6 +136,12 @@ const Navbar = () => {
           onMouseMove={handleAuraMove}
           onMouseEnter={() => setAura((a) => ({ ...a, visible: true }))}
           onMouseLeave={() => setAura((a) => ({ ...a, visible: false }))}
+          sx={{
+            '& a:focus': {
+              outline: 'none',
+              boxShadow: 'none',
+            }
+          }}
         >
           <Box
             pointerEvents="none"
@@ -134,13 +166,14 @@ const Navbar = () => {
               onClick={() => scrollTo(0, 0)}
               color={linkColor(path)}
               _hover={{ textDecoration: 'none', color: '#EC4899' }}
+              _focus={{ outline: 'none', boxShadow: 'none' }}
             >
               {label}
             </ChakraLink>
           ))}
         </HStack>
 
-        {/* Mobile Nav Overlay */}
+        {/* Mobile Navigation Overlay */}
         <Box
           display={{ base: isOpen ? 'flex' : 'none', md: 'none' }}
           position="fixed"
@@ -185,12 +218,12 @@ const Navbar = () => {
               }}
               color={linkColor(path)}
               _hover={{ textDecoration: 'none', color: '#EC4899' }}
+              _focus={{ outline: 'none', boxShadow: 'none' }}
             >
               {label}
             </ChakraLink>
           ))}
 
-          {/* Mobile Auth Area */}
           <SignedOut>
             <Button
               onClick={() => openSignIn()}
@@ -224,7 +257,7 @@ const Navbar = () => {
           </SignedIn>
         </Box>
 
-        {/* Right Side Buttons */}
+        {/* Right Side */}
         <Flex align="center" gap={5}>
           <IconButton
             display={{ base: 'none', md: 'inline-flex' }}

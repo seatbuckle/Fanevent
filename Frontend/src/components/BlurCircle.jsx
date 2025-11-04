@@ -1,11 +1,17 @@
-// Might delete this later because it's using className
-const BlurCircle = ({top = "auto", left = "auto", right = "auto", bottom = "auto"}) => {
+
+import { Box } from '@chakra-ui/react'
+
+const BlurCircle = ({ top = "auto", left = "auto", right = "auto", bottom = "auto" }) => {
   return (
-    <div className="absolute -z-50 h-58 w-58 aspect-square rounded-full bg-primary/30 blur-3xl" 
-    style={{top: top, left: left, right: right, bottom: bottom }}>
-      
-    </div>
+    <Box
+      position="absolute"
+      zIndex={-1}
+      height="232px"
+      width="232px"
+      borderRadius="full"
+      bg="rgba(59, 130, 246, 0.2)"
+      filter="blur(60px)"
+      style={{ top, left, right, bottom }}
+    />
   )
 }
-
-export default BlurCircle
