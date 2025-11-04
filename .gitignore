@@ -16,7 +16,6 @@ build/
 .cache/
 
 # Environment variables and secrets
-.env
 .env.local
 .env.development
 .env.production
