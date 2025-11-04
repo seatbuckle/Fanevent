@@ -14,11 +14,11 @@ const PopularGroupsSection = () => {
         align="center"
         justify="space-between"
         position="relative"
-        pt={8}
+        pt={12}
         pb={6}
       >
-        <BlurCircle top="0" left="-80px" />
-        
+        <BlurCircle top="100px" left="-80px" />
+
         <Text fontWeight="semibold" fontSize="xl" color="gray.800">
           Popular Groups
         </Text>
@@ -39,10 +39,10 @@ const PopularGroupsSection = () => {
       <Flex
         gap={5}
         flexWrap="wrap"
-        justify={{ base: 'center', md: 'flex-start' }}
+        justify="center"
         mt={6}
       >
-        {dummyGroupsData.slice(0, 5).map((group) => (
+        {dummyGroupsData.slice(0, 6).map((group) => (
           <GroupCard key={group._id} group={group} />
         ))}
       </Flex>

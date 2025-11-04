@@ -1,3 +1,4 @@
+
 import { Box, Flex, Text, Badge } from '@chakra-ui/react'
 import { Calendar, MapPin, Users } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -25,13 +26,15 @@ const EventCard = ({ event }) => {
       transition="all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
       cursor="pointer"
       w="full"
-      maxW="280px"
+      flex={{ base: '1 1 100%', sm: '0 0 calc(50% - 10px)', lg: '0 0 280px' }}
+      maxW={{ base: '100%', sm: 'calc(50% - 10px)', lg: '280px' }}
+      minW={{ base: '100%', sm: 'calc(50% - 10px)', lg: '280px' }}
       position="relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       _hover={{ 
         transform: 'translateY(-8px)', 
-        boxShadow: '0 20px 40px rgba(236, 72, 153, 0.15)'
+        boxShadow: '0 20px 40px rgba(59, 130, 246, 0.15)'
       }}
     >
       {/* Soft aura on hover */}
@@ -41,7 +44,7 @@ const EventCard = ({ event }) => {
         left="-20px"
         right="-20px"
         bottom="-20px"
-        bg="radial-gradient(circle, rgba(236, 72, 153, 0.15) 0%, transparent 70%)"
+        bg="radial-gradient(circle, rgba(219, 234, 254, 0.6) 0%, transparent 70%)"
         opacity={isHovered ? 1 : 0}
         transition="opacity 0.3s ease"
         pointerEvents="none"
@@ -66,7 +69,7 @@ const EventCard = ({ event }) => {
         />
       </Box>
 
-      <Box p={4}>
+      <Box p={4} h="200px" display="flex" flexDir="column">
         <Text fontSize="xs" color="gray.500" fontWeight="medium" mb={1.5}>
           {event.category}
         </Text>
@@ -90,7 +93,7 @@ const EventCard = ({ event }) => {
           <Text>{event.attendees} attending</Text>
         </Flex>
 
-        <Flex gap={1.5} flexWrap="wrap">
+        <Flex gap={1.5} flexWrap="wrap" mt="auto">
           {event.tags.slice(0, 3).map((tag, index) => (
             <Badge
               key={index}

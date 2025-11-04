@@ -1,4 +1,3 @@
-
 import { Box, Flex, Text, Button } from '@chakra-ui/react'
 import { ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -18,7 +17,7 @@ const FeaturedSection = () => {
         pt={12}
         pb={6}
       >
-        <BlurCircle top="0" right="-80px" />
+        <BlurCircle top="60px" right="-80px" />
         
         <Text fontWeight="semibold" fontSize="xl" color="gray.800">
           Upcoming Events

@@ -19,9 +19,10 @@ import PopularGroupsSection from '../components/PopularGroupsSection'
 
 const Home = () => {
   return (
-    <Box bg="#F9FAFB" minH="100vh" pt={20}>
+    <Box bg="#F9FAFB" minH="100vh" pt={20} overflow="visible">
       <FeaturedSection />
       <PopularGroupsSection />
+      <Box h={{ base: '100px', md: '160px' }} /> {/* adds bottom space */}
     </Box>
   )
 }
