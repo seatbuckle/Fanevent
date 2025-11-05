@@ -1,7 +1,7 @@
 // Navbar.jsx
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { assets } from '../assets/assets'
+import { assets, dummyEventsData, dummyGroupsData } from '../assets/assets'
 import { Menu, Search, X, Bell, LayoutDashboard, MessageSquare } from 'lucide-react'
 import {
   Box,
@@ -19,11 +19,14 @@ import {
   useUser,
   useClerk,
 } from '@clerk/clerk-react'
+import AdvancedSearchSheet from './AdvancedSearchModal'
+
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [aura, setAura] = useState({ x: 0, y: 0, visible: false })
+  const [isSearchOpen, setIsSearchOpen] = useState(false) // ← for the sheet
 
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -50,17 +53,24 @@ const Navbar = () => {
       ? '#EC4899'
       : 'gray.700'
 
-  // Shared Clerk UserButton appearance for consistent hover styling
   const clerkAppearance = {
     elements: {
       userButtonAvatarBox: { width: 36, height: 36 },
       userButtonPopoverActionButton: {
         transition: 'background-color 0.2s ease',
-        '&:hover': {
-          backgroundColor: '#FCE7F3', // light pink hover
-        },
+        '&:hover': { backgroundColor: '#FCE7F3' },
       },
     },
+  }
+
+  const handleApplySearch = (filters) => {
+    const qp = new URLSearchParams()
+    if (filters.query) qp.set('q', filters.query)
+    if (filters.kind && filters.kind !== 'All Results') qp.set('type', filters.kind.toLowerCase())
+    if (filters.categories?.length) qp.set('categories', filters.categories.join(','))
+    if (filters.tags?.length) qp.set('tags', filters.tags.join(','))
+    if (filters.dates?.length) qp.set('dates', filters.dates.join(','))
+    navigate(`/events?${qp.toString()}`)
   }
 
   return (
@@ -77,7 +87,7 @@ const Navbar = () => {
     >
       <Flex align="center" justify="space-between">
         {/* Logo */}
-        <Link to="/" style={{ outline: 'none' }}> {/* Added outline none here just in case */}
+        <Link to="/" style={{ outline: 'none' }}>
           <Flex align="center" gap={2}>
             <Box as="img" src={assets.logo} alt="Logo" w="50px" h="auto" mt={-1.5} />
             <Text
@@ -134,7 +144,6 @@ const Navbar = () => {
               onClick={() => scrollTo(0, 0)}
               color={linkColor(path)}
               _hover={{ textDecoration: 'none', color: '#EC4899' }}
-              // FIX: Remove grey box on click/focus
               _focus={{ boxShadow: 'none', outline: 'none' }}
               _active={{ boxShadow: 'none', outline: 'none' }}
             >
@@ -188,7 +197,6 @@ const Navbar = () => {
               }}
               color={linkColor(path)}
               _hover={{ textDecoration: 'none', color: '#EC4899' }}
-              // FIX: Remove grey box on click/focus
               _focus={{ boxShadow: 'none', outline: 'none' }}
               _active={{ boxShadow: 'none', outline: 'none' }}
             >
@@ -207,7 +215,6 @@ const Navbar = () => {
               borderRadius="full"
               fontWeight="medium"
               _hover={{ bg: '#C7327C' }}
-              // FIX: Remove grey box on click/focus
               _focus={{ boxShadow: 'none' }}
               _active={{ boxShadow: 'none' }}
             >
@@ -241,9 +248,9 @@ const Navbar = () => {
             color="#99A0A8"
             aria-label="Search"
             _hover={{ bg: 'gray.100' }}
-            // FIX: Remove grey box on click/focus
             _focus={{ boxShadow: 'none' }}
             _active={{ boxShadow: 'none' }}
+            onClick={() => setIsSearchOpen(true)}
           >
             <Search size={20} />
           </IconButton>
@@ -254,7 +261,6 @@ const Navbar = () => {
             color="#99A0A8"
             aria-label="Notifications"
             _hover={{ bg: 'gray.100' }}
-            // FIX: Remove grey box on click/focus
             _focus={{ boxShadow: 'none' }}
             _active={{ boxShadow: 'none' }}
           >
@@ -271,7 +277,6 @@ const Navbar = () => {
               fontWeight="medium"
               _hover={{ bg: '#C7327C' }}
               onClick={() => openSignIn()}
-              // FIX: Remove grey box on click/focus
               _focus={{ boxShadow: 'none' }}
               _active={{ boxShadow: 'none' }}
             >
@@ -312,6 +317,16 @@ const Navbar = () => {
           <Menu size={22} />
         </IconButton>
       </Flex>
+
+      {/* Advanced Search Sheet */}
+      <AdvancedSearchSheet
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onApply={handleApplySearch}
+        events={dummyEventsData || []}
+        groups={dummyGroupsData || []}
+      />
+
     </Box>
   )
 }

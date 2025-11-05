@@ -23,7 +23,7 @@ const App = () => {
           <Route path="/events" element={<Events />} />
           <Route path="/events/:id" element={<EventDetails />} />
           <Route path='/groups' element={<Groups/>} />
-          <Route path='/groups/:id' element={<GroupDetails/>} />
+          <Route path="/groups/:id" element={<GroupDetails />} />
           <Route path='/my-dashboard' element={<MyDashboard/>} />
         </Routes>
           {!isAdminRoute && <Footer />}

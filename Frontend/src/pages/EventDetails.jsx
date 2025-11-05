@@ -1,13 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Box, Flex, Text, Button, Badge, IconButton, Grid } from '@chakra-ui/react'
-import {
-  DialogRoot,
-  DialogContent,
-  DialogBody,
-  DialogCloseTrigger,
-  DialogBackdrop,
-} from '@chakra-ui/react'
 import {
   Calendar,
   MapPin,
@@ -24,7 +17,7 @@ import {
   Flag,
   PlayCircle,
 } from 'lucide-react'
-import ReactPlayer from 'react-player'
+import ReactPlayer from 'react-player' // keep for non-YouTube
 import { dummyEventsData } from '../assets/assets'
 import EventCard from '@/components/EventCard'
 import toast, { Toaster } from 'react-hot-toast'
@@ -46,21 +39,34 @@ const EventDetails = () => {
   const [selectedMedia, setSelectedMedia] = useState(null)
   const [rsvpEvents, setRsvpEvents] = useState([])
 
+  // TODO: env var in prod
+  const GOOGLE_MAPS_API_KEY = 'AIzaSyCwj0qLG6HYkmltOOKFz3xl6v4wpT6k-5M'
+
   useEffect(() => {
     const foundEvent = dummyEventsData.find(e => e._id === id)
-    setEvent(foundEvent)
+    setEvent(foundEvent || null)
     if (!foundEvent) navigate('/events')
   }, [id, navigate])
 
   const handleLike = () => setIsLiked(!isLiked)
 
-  // --- helpers for video thumbnails ---
+  // ---- YouTube helpers ----
   const isYouTube = (url = '') =>
-    /(?:youtube\.com\/.*v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/i.test(url)
+    /(?:^https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\//i.test(url)
 
   const getYouTubeId = (url = '') => {
-    const m = url.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/i)
-    return m ? m[1] : null
+    if (!url) return null
+    const patterns = [
+      /[?&]v=([A-Za-z0-9_-]{6,})/i,
+      /youtu\.be\/([A-Za-z0-9_-]{6,})/i,
+      /youtube\.com\/embed\/([A-Za-z0-9_-]{6,})/i,
+      /youtube\.com\/shorts\/([A-Za-z0-9_-]{6,})/i
+    ]
+    for (const p of patterns) {
+      const m = url.match(p)
+      if (m?.[1]) return m[1]
+    }
+    return null
   }
 
   const getVideoThumb = (url = '') => {
@@ -75,29 +81,15 @@ const EventDetails = () => {
       setRsvpEvents([...rsvpEvents, event.date])
     }
   }
-
-  const handleCancelRSVP = () => {
-    setHasRSVP(false)
-    setRsvpEvents(rsvpEvents.filter(d => d !== event.date))
-  }
-
-  const handleCheckIn = () => {
-    setIsCheckedIn(true)
-    setCheckInTime(new Date())
-  }
-
-  const handleCancelCheckIn = () => {
-    setIsCheckedIn(false)
-    setCheckInTime(null)
-  }
-
+  const handleCancelRSVP = () => { setHasRSVP(false); setRsvpEvents(rsvpEvents.filter(d => d !== event.date)) }
+  const handleCheckIn = () => { setIsCheckedIn(true); setCheckInTime(new Date()) }
+  const handleCancelCheckIn = () => { setIsCheckedIn(false); setCheckInTime(null) }
   const handleCheckOut = () => {
     const now = new Date()
     const diff = (now - checkInTime) / (1000 * 60 * 60)
     setHoursLogged(diff.toFixed(1))
     setIsCheckedOut(true)
   }
-
   const handleSkipLogging = () => setHasSkipped(true)
   const handleCancelCheckOut = () => { setIsCheckedOut(false); setHoursLogged(null) }
   const handleCancelSkipped = () => setHasSkipped(false)
@@ -106,14 +98,18 @@ const EventDetails = () => {
     try {
       await navigator.clipboard.writeText(window.location.href)
       toast.success('Link copied to clipboard!', { duration: 2000 })
-    } catch (err) {
-      toast.error('Failed to copy link.')
-    }
+    } catch { toast.error('Failed to copy link.') }
   }
-
   const handleContact = () => console.log('Contact button clicked (future feature)')
   const handleJoinGroup = () => setHasJoinedGroup(!hasJoinedGroup)
-  const handleReport = () => toast('Report submitted — thank you!', { icon: '⚠️' })
+  const handleReport = () => toast('Report submitted – thank you!', { icon: '⚠️' })
+
+  const handleMapClick = () => {
+    if (event) {
+      const address = encodeURIComponent(`${event.address}, ${event.location}`)
+      window.open(`https://www.google.com/maps/search/?api=1&query=${address}`, '_blank')
+    }
+  }
 
   const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const formatTime = (t) => t || '10:00 AM - 5:00 PM PST'
@@ -122,12 +118,10 @@ const EventDetails = () => {
     const now = new Date()
     return { month: now.toLocaleString('en-US', { month: 'long' }), year: now.getFullYear() }
   }
-
   const getDaysInMonth = () => {
     const now = new Date(), year = now.getFullYear(), month = now.getMonth()
     return { firstDay: new Date(year, month, 1).getDay(), daysInMonth: new Date(year, month + 1, 0).getDate(), currentDay: now.getDate() }
   }
-
   const hasEventOnDay = (day) => {
     const now = new Date()
     return rsvpEvents.some(eventDate => {
@@ -136,11 +130,38 @@ const EventDetails = () => {
     })
   }
 
+  // ---- Smarter related events (always shows) ----
+  const relatedEvents = useMemo(() => {
+    if (!event) return []
+    const others = dummyEventsData.filter(e => e._id !== event._id)
+
+    // 1) same category
+    let rel = others.filter(e => e.category === event.category)
+
+    // 2) overlapping tags
+    if (rel.length < 3) {
+      const tags = new Set(event.tags || [])
+      const byTags = others.filter(e => (e.tags || []).some(t => tags.has(t)))
+                           .filter(e => !rel.includes(e))
+      rel = [...rel, ...byTags]
+    }
+
+    // 3) closest-by-date fallback
+    if (rel.length < 3) {
+      const target = new Date(event.date).getTime()
+      const byDate = [...others]
+        .filter(e => e.date)
+        .sort((a, b) => Math.abs(new Date(a.date) - target) - Math.abs(new Date(b.date) - target))
+        .filter(e => !rel.includes(e))
+      rel = [...rel, ...byDate]
+    }
+    return rel.slice(0, 3)
+  }, [event])
+
   if (!event) return null
+
   const mediaGallery = event.media || []
   const latestMedia = mediaGallery[mediaGallery.length - 1]
-
-  const relatedEvents = dummyEventsData.filter(e => e._id !== id && e.category === event?.category).slice(0, 3)
   const { month, year } = getCurrentMonth()
   const { firstDay, daysInMonth, currentDay } = getDaysInMonth()
 
@@ -269,10 +290,24 @@ const EventDetails = () => {
                     </Flex>
                   </Box>
 
-                  {/* MAP + ABOUT */}
-                  <Box bg="gray.100" borderRadius="lg" h="200px" mb={6} overflow="hidden">
-                    <Box as="img" src="https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/-122.4699,37.7699,12,0/600x300@2x?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw"
-                      alt="Map" w="100%" h="100%" objectFit="cover" />
+                  {/* GOOGLE MAPS - INTERACTIVE */}
+                  <Box 
+                    bg="gray.100" borderRadius="lg" h="250px" mb={8} overflow="hidden"
+                    position="relative" cursor="pointer" onClick={handleMapClick}
+                    _hover={{ '&::after': { content: '""', position: 'absolute', inset: 0, bg: 'rgba(236, 72, 153, 0.1)' } }}
+                    transition="all 0.2s"
+                  >
+                    <Box 
+                      as="iframe"
+                      src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${encodeURIComponent(event.address + ', ' + event.location)}`}
+                      w="100%" h="100%" border="none" pointerEvents="none"
+                    />
+                    <Flex position="absolute" bottom={3} right={3} bg="white" px={3} py={1.5}
+                          borderRadius="md" boxShadow="md" fontSize="xs" fontWeight="medium"
+                          color="gray.700" align="center" gap={1}>
+                      <MapPin size={16} color="#EC4899" />
+                      Click to open in Google Maps
+                    </Flex>
                   </Box>
 
                   <Box mb={6}>
@@ -288,18 +323,71 @@ const EventDetails = () => {
                 </Box>
               </Box>
 
-              {/* RELATED EVENTS */}
-              {relatedEvents.length > 0 && (
-                <Box mt={8}>
-                  <Flex justify="space-between" align="center" mb={4}>
-                    <Text fontSize="xl" fontWeight="semibold">Events like this...</Text>
-                    <Button variant="plain" color="#EC4899" size="sm" onClick={() => navigate('/events')}>View All</Button>
-                  </Flex>
-                  <Flex gap={5} flexWrap="wrap">
-                    {relatedEvents.map((e) => <EventCard key={e._id} event={e} />)}
-                  </Flex>
-                </Box>
-              )}
+              {/* ---------- EVENTS LIKE THIS (table-style UI) ---------- */}
+              <Box mt={8} bg="white" borderRadius="2xl" p={6} boxShadow="sm">
+                <Flex justify="space-between" align="center" mb={4}>
+                  <Text fontSize="xl" fontWeight="semibold">Events like this...</Text>
+                  <Button variant="link" color="#EC4899" size="sm" onClick={() => navigate('/events')}>
+                    View All
+                  </Button>
+                </Flex>
+
+                {/* Header */}
+                <Grid
+                  templateColumns={{ base: '1fr', md: '2fr 1fr 2fr' }}
+                  gap={4}
+                  px={3}
+                  py={2}
+                  borderBottom="1px solid"
+                  borderColor="gray.100"
+                  fontSize="sm"
+                  color="gray.500"
+                  fontWeight="semibold"
+                >
+                  <Text>Name</Text>
+                  <Text display={{ base: 'none', md: 'block' }}>Location</Text>
+                  <Text display={{ base: 'none', md: 'block' }}>Tags</Text>
+                </Grid>
+
+                {/* Rows */}
+                {relatedEvents.map((e, idx) => (
+                  <Grid
+                    key={e._id}
+                    templateColumns={{ base: '1fr', md: '2fr 1fr 2fr' }}
+                    gap={4}
+                    px={3}
+                    py={4}
+                    borderBottom={idx === relatedEvents.length - 1 ? 'none' : '1px solid'}
+                    borderColor="gray.100"
+                    alignItems="center"
+                    cursor="pointer"
+                    _hover={{ bg: 'gray.50' }}
+                    onClick={() => navigate(`/events/${e._id}`)}
+                  >
+                    {/* Name */}
+                    <Flex direction="column" gap={1}>
+                      <Text fontWeight="medium" color="gray.800">{e.title}</Text>
+                      <Text fontSize="xs" color="gray.500">{e.category}</Text>
+                    </Flex>
+
+                    {/* Location */}
+                    <Flex display={{ base: 'none', md: 'flex' }} align="center" gap={2}>
+                      <Badge bg="gray.100" color="gray.700" px={2} py={1} borderRadius="full" fontSize="xs">
+                        {e.location}
+                      </Badge>
+                    </Flex>
+
+                    {/* Tags */}
+                    <Flex display={{ base: 'none', md: 'flex' }} gap={2} flexWrap="wrap">
+                      {(e.tags || []).slice(0, 3).map((t, i) => (
+                        <Badge key={i} bg="pink.50" color="#EC4899" px={2} py={1} borderRadius="md" fontSize="xs">
+                          {t}
+                        </Badge>
+                      ))}
+                    </Flex>
+                  </Grid>
+                ))}
+              </Box>
             </Box>
 
             {/* RIGHT SIDEBAR */}
@@ -315,7 +403,7 @@ const EventDetails = () => {
                     {[...Array(daysInMonth)].map((_,i)=>{
                       const day=i+1; const isToday=day===currentDay; const hasEvent=hasEventOnDay(day)
                       return(
-                        <Box key={day} textAlign="center" p={1} borderRadius="md" bg={isToday?'#EC4899':'transparent'} color={isToday?'white':'gray.700'} fontSize="xs">
+                        <Box key={day} position="relative" textAlign="center" p={1} borderRadius="md" bg={isToday?'#EC4899':'transparent'} color={isToday?'white':'gray.700'} fontSize="xs">
                           {day}
                           {hasEvent && <Box position="absolute" bottom="2px" left="50%" transform="translateX(-50%)" w="4px" h="4px" borderRadius="full" bg={isToday?'white':'#EC4899'}/>}
                         </Box>
@@ -366,13 +454,7 @@ const EventDetails = () => {
                           objectFit="cover"
                           bg="gray.100"
                         />
-                        <Flex
-                          position="absolute"
-                          inset={0}
-                          align="center"
-                          justify="center"
-                          pointerEvents="none"
-                        >
+                        <Flex position="absolute" inset={0} align="center" justify="center" pointerEvents="none">
                           <Box bg="rgba(236,72,153,0.9)" p={3} borderRadius="full">
                             <PlayCircle size={36} color="white" />
                           </Box>
@@ -393,46 +475,20 @@ const EventDetails = () => {
                 )}
               </Box>
 
-              {/* MEDIA GALLERY MODAL (FULL SCREEN) */}
+              {/* MEDIA GALLERY MODAL */}
               {isMediaOpen && (
                 <Box
-                  position="fixed"
-                  top={0}
-                  left={0}
-                  w="100vw"
-                  h="100vh"
-                  bg="rgba(0, 0, 0, 0.7)"
-                  backdropFilter="blur(8px)"
-                  zIndex={2000}
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  p={4}
-                  onClick={() => setIsMediaOpen(false)}
+                  position="fixed" top={0} left={0} w="100vw" h="100vh" bg="rgba(0, 0, 0, 0.7)"
+                  backdropFilter="blur(8px)" zIndex={2000} display="flex" alignItems="center" justifyContent="center"
+                  p={4} onClick={() => { setIsMediaOpen(false); setSelectedMedia(null) }}
                 >
                   <Box
-                    bg="white"
-                    borderRadius="2xl"
-                    maxW="1100px"
-                    w="100%"
-                    maxH="90vh"
-                    overflowY="auto"
-                    position="relative"
-                    boxShadow="2xl"
-                    p={6}
-                    onClick={(e) => e.stopPropagation()}
+                    bg="white" borderRadius="2xl" maxW="1100px" w="100%" maxH="90vh" overflowY="auto"
+                    position="relative" boxShadow="2xl" p={6} onClick={(e) => e.stopPropagation()}
                   >
-                    <IconButton
-                      aria-label="Close gallery"
-                      position="absolute"
-                      top={4}
-                      right={4}
-                      variant="ghost"
-                      color="gray.600"
-                      onClick={() => setIsMediaOpen(false)}
-                      _hover={{ bg: 'gray.100' }}
-                      zIndex={1}
-                    >
+                    <IconButton aria-label="Close gallery" position="absolute" top={4} right={4}
+                      variant="ghost" color="gray.600" onClick={() => { setIsMediaOpen(false); setSelectedMedia(null) }}
+                      _hover={{ bg: 'gray.100' }} zIndex={1}>
                       <X size={20} />
                     </IconButton>
                     <Text fontSize="lg" fontWeight="semibold" mb={4}>Media Gallery</Text>
@@ -452,7 +508,7 @@ const EventDetails = () => {
                             boxShadow="sm"
                             _hover={{ transform: 'scale(1.02)', boxShadow: 'md' }}
                             transition="all 0.2s"
-                            onClick={() => setSelectedMedia(media)}
+                            onClick={(e) => { e.stopPropagation(); setSelectedMedia(media) }}
                           >
                             <Box as="img" src={thumb} alt={media.title} w="100%" h="220px" objectFit="cover" bg="gray.100" />
                             {isVideo && (
@@ -474,20 +530,12 @@ const EventDetails = () => {
                 </Box>
               )}
 
-              {/* FULLSCREEN SINGLE MEDIA VIEWER */}
+              {/* FULLSCREEN MEDIA VIEWER */}
               {selectedMedia && (
                 <Box
-                  position="fixed"
-                  top={0}
-                  left={0}
-                  w="100vw"
-                  h="100vh"
-                  bg="rgba(0, 0, 0, 0.95)"
-                  zIndex={3000}
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  onClick={() => setSelectedMedia(null)}
+                  position="fixed" top={0} left={0} w="100vw" h="100vh" bg="rgba(0, 0, 0, 0.95)"
+                  zIndex={3000} display="flex" flexDirection="column" alignItems="center" justifyContent="center"
+                  p={4} onClick={() => setSelectedMedia(null)}
                 >
                   <IconButton
                     aria-label="Close media viewer"
@@ -502,18 +550,57 @@ const EventDetails = () => {
                   >
                     <X size={24} />
                   </IconButton>
+                  
                   {selectedMedia.type === 'image' ? (
                     <Box 
                       as="img" 
                       src={selectedMedia.url} 
-                      maxH="90vh" 
+                      maxH="85vh" 
                       maxW="90vw" 
                       onClick={(e) => e.stopPropagation()}
                       borderRadius="lg"
                     />
                   ) : (
-                    <Box w="90vw" maxW="1200px" onClick={(e) => e.stopPropagation()}>
-                      <ReactPlayer url={selectedMedia.url} width="100%" height="80vh" controls playing />
+                    <Box 
+                      w="90vw" 
+                      maxW="1200px" 
+                      onClick={(e) => e.stopPropagation()}
+                      display="flex"
+                      flexDirection="column"
+                      gap={3}
+                    >
+                      <Box borderRadius="lg" overflow="hidden" bg="black">
+                        {/* --- HARD FIX: native YouTube iframe; fall back to ReactPlayer for non-YouTube --- */}
+                        {isYouTube(selectedMedia.url) ? (
+                          <Box
+                            as="iframe"
+                            width="100%"
+                            height="75vh"
+                            src={`https://www.youtube.com/embed/${getYouTubeId(selectedMedia.url)}?autoplay=1&mute=0&rel=0&modestbranding=1&playsinline=1`}
+                            title={selectedMedia.title}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowFullScreen
+                            loading="eager"
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            style={{ display: 'block', border: '0' }}
+                            onError={() => toast.error('Unable to load YouTube video.')}
+                          />
+                        ) : (
+                          <ReactPlayer
+                            url={selectedMedia.url}
+                            width="100%"
+                            height="75vh"
+                            controls
+                            playing
+                            playsinline
+                            onError={() => toast.error('Unable to load this video.')}
+                          />
+                        )}
+                      </Box>
+                      <Box color="white" textAlign="center">
+                        <Text fontSize="lg" fontWeight="semibold">{selectedMedia.title}</Text>
+                        <Text fontSize="sm" color="gray.300">By: {selectedMedia.by}</Text>
+                      </Box>
                     </Box>
                   )}
                 </Box>
