@@ -20,8 +20,8 @@ const App = () => {
         {!isAdminRoute && <Navbar/>}
         <Routes>
           <Route path='/' element={<Home/>} />
-          <Route path='/events' element={<Events/>} />
-          <Route path='/events/:id' element={<EventDetails/>} />
+          <Route path="/events" element={<Events />} />
+          <Route path="/events/:id" element={<EventDetails />} />
           <Route path='/groups' element={<Groups/>} />
           <Route path='/groups/:id' element={<GroupDetails/>} />
           <Route path='/my-dashboard' element={<MyDashboard/>} />

@@ -36,28 +36,6 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Add custom CSS for Messages button hover
-  useEffect(() => {
-    const style = document.createElement('style')
-    style.innerHTML = `
-      /* Pink hover for Messages button - target by icon SVG */
-      button[class*="userButtonPopoverActionButton"]:has(svg[class*="message-square"]):hover,
-      button[class*="userButtonPopoverActionButton"]:has(svg[data-lucide="message-square"]):hover {
-        background-color: #FCE7F3 !important;
-      }
-      
-      /* Alternative: target by button content */
-      div[class*="userButtonPopoverActions"] button:hover:has([class*="message"]) {
-        background-color: #FCE7F3 !important;
-      }
-    `
-    document.head.appendChild(style)
-    
-    return () => {
-      document.head.removeChild(style)
-    }
-  }, [])
-
   const handleAuraMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
     setAura({
@@ -72,19 +50,15 @@ const Navbar = () => {
       ? '#EC4899'
       : 'gray.700'
 
-  // 🔧 Clerk dropdown hover styling
+  // Shared Clerk UserButton appearance for consistent hover styling
   const clerkAppearance = {
     elements: {
+      userButtonAvatarBox: { width: 36, height: 36 },
       userButtonPopoverActionButton: {
         transition: 'background-color 0.2s ease',
-      },
-      // Pink hover for Manage Account (Clerk built-in button)
-      userButtonPopoverActionButton__manageAccount: {
-        '&:hover': { backgroundColor: '#FCE7F3' },
-      },
-      // Neutral gray for Sign Out
-      userButtonPopoverActionButton__signOut: {
-        '&:hover': { backgroundColor: '#F5F5F5' },
+        '&:hover': {
+          backgroundColor: '#FCE7F3', // light pink hover
+        },
       },
     },
   }
@@ -103,7 +77,7 @@ const Navbar = () => {
     >
       <Flex align="center" justify="space-between">
         {/* Logo */}
-        <Link to="/">
+        <Link to="/" style={{ outline: 'none' }}> {/* Added outline none here just in case */}
           <Flex align="center" gap={2}>
             <Box as="img" src={assets.logo} alt="Logo" w="50px" h="auto" mt={-1.5} />
             <Text
@@ -119,7 +93,7 @@ const Navbar = () => {
           </Flex>
         </Link>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Nav */}
         <HStack
           display={{ base: 'none', md: 'flex' }}
           gap={8}
@@ -136,12 +110,6 @@ const Navbar = () => {
           onMouseMove={handleAuraMove}
           onMouseEnter={() => setAura((a) => ({ ...a, visible: true }))}
           onMouseLeave={() => setAura((a) => ({ ...a, visible: false }))}
-          sx={{
-            '& a:focus': {
-              outline: 'none',
-              boxShadow: 'none',
-            }
-          }}
         >
           <Box
             pointerEvents="none"
@@ -166,14 +134,16 @@ const Navbar = () => {
               onClick={() => scrollTo(0, 0)}
               color={linkColor(path)}
               _hover={{ textDecoration: 'none', color: '#EC4899' }}
-              _focus={{ outline: 'none', boxShadow: 'none' }}
+              // FIX: Remove grey box on click/focus
+              _focus={{ boxShadow: 'none', outline: 'none' }}
+              _active={{ boxShadow: 'none', outline: 'none' }}
             >
               {label}
             </ChakraLink>
           ))}
         </HStack>
 
-        {/* Mobile Navigation Overlay */}
+        {/* Mobile Nav Overlay */}
         <Box
           display={{ base: isOpen ? 'flex' : 'none', md: 'none' }}
           position="fixed"
@@ -218,12 +188,15 @@ const Navbar = () => {
               }}
               color={linkColor(path)}
               _hover={{ textDecoration: 'none', color: '#EC4899' }}
-              _focus={{ outline: 'none', boxShadow: 'none' }}
+              // FIX: Remove grey box on click/focus
+              _focus={{ boxShadow: 'none', outline: 'none' }}
+              _active={{ boxShadow: 'none', outline: 'none' }}
             >
               {label}
             </ChakraLink>
           ))}
 
+          {/* Mobile Auth Area */}
           <SignedOut>
             <Button
               onClick={() => openSignIn()}
@@ -234,6 +207,9 @@ const Navbar = () => {
               borderRadius="full"
               fontWeight="medium"
               _hover={{ bg: '#C7327C' }}
+              // FIX: Remove grey box on click/focus
+              _focus={{ boxShadow: 'none' }}
+              _active={{ boxShadow: 'none' }}
             >
               Login
             </Button>
@@ -257,7 +233,7 @@ const Navbar = () => {
           </SignedIn>
         </Box>
 
-        {/* Right Side */}
+        {/* Right Side Buttons */}
         <Flex align="center" gap={5}>
           <IconButton
             display={{ base: 'none', md: 'inline-flex' }}
@@ -265,6 +241,9 @@ const Navbar = () => {
             color="#99A0A8"
             aria-label="Search"
             _hover={{ bg: 'gray.100' }}
+            // FIX: Remove grey box on click/focus
+            _focus={{ boxShadow: 'none' }}
+            _active={{ boxShadow: 'none' }}
           >
             <Search size={20} />
           </IconButton>
@@ -275,6 +254,9 @@ const Navbar = () => {
             color="#99A0A8"
             aria-label="Notifications"
             _hover={{ bg: 'gray.100' }}
+            // FIX: Remove grey box on click/focus
+            _focus={{ boxShadow: 'none' }}
+            _active={{ boxShadow: 'none' }}
           >
             <Bell size={20} />
           </IconButton>
@@ -289,6 +271,9 @@ const Navbar = () => {
               fontWeight="medium"
               _hover={{ bg: '#C7327C' }}
               onClick={() => openSignIn()}
+              // FIX: Remove grey box on click/focus
+              _focus={{ boxShadow: 'none' }}
+              _active={{ boxShadow: 'none' }}
             >
               Login
             </Button>
@@ -321,6 +306,8 @@ const Navbar = () => {
           color="#99A0A8"
           aria-label="Open menu"
           _hover={{ bg: 'gray.100' }}
+          _focus={{ boxShadow: 'none' }}
+          _active={{ bg: 'transparent' }}
         >
           <Menu size={22} />
         </IconButton>
