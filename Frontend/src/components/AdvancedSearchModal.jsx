@@ -41,15 +41,54 @@ const Section = ({ title, children }) => (
   </div>
 )
 
+/* ---------- Thumbnail helpers ---------- */
+const getInitials = (s = '') => {
+  const parts = s.trim().split(/\s+/)
+  const a = parts[0]?.[0] || ''
+  const b = parts.length > 1 ? parts[parts.length - 1]?.[0] || '' : ''
+  return (a + b).toUpperCase()
+}
+
+const Thumb = ({ title, url, size = 36 }) => {
+  const initials = getInitials(title || '')
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={title || 'thumbnail'}
+        width={size}
+        height={size}
+        style={{
+          width: size, height: size, borderRadius: 8,
+          objectFit: 'cover', flexShrink: 0, background: '#F3F4F6'
+        }}
+      />
+    )
+  }
+  return (
+    <div
+      aria-label={title || 'thumbnail'}
+      style={{
+        width: size, height: size, borderRadius: 8,
+        background: 'linear-gradient(135deg, #FCE7F3, #E9D5FF)',
+        color: '#111827', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', fontWeight: 700, fontSize: 12, flexShrink: 0
+      }}
+    >
+      {initials || '•'}
+    </div>
+  )
+}
+
 /**
  * Props:
  *  - isOpen, onClose, onApply (unchanged)
  *  - events: array of event objects (optional but recommended)
  *  - groups: array of group objects (optional)
- * Expected event fields used: _id, title, date, groupName, location, tags[], categories[]
- * Expected group fields used: _id, name, membersCount, tags[]
+ * Expected event fields used: _id, title, date, groupName, location, tags[], categories[], image/coverImage/banner/photoUrl/thumbnail
+ * Expected group fields used: _id, name, membersCount, tags[], image/avatar/logo/photoUrl/thumbnail
  */
-const AdvancedSearchSheet = ({ isOpen, onClose, onApply, events = [], groups = [] }) => {
+const AdvancedSearchSheet = ({ isOpen, onClose, onApply, events = [], groups = [], initialKind = 'All Results' }) => {
   const [mounted, setMounted] = useState(false)
   const host = useRef(null)
 
@@ -81,13 +120,13 @@ const AdvancedSearchSheet = ({ isOpen, onClose, onApply, events = [], groups = [
 
   if (!isOpen || !mounted || !host.current) return null
   return createPortal(
-    <SheetContent onClose={onClose} onApply={onApply} events={events} groups={groups} />,
+    <SheetContent onClose={onClose} onApply={onApply} events={events} groups={groups} initialKind={initialKind} />,
     host.current
   )
 }
 
-const SheetContent = ({ onClose, onApply, events, groups }) => {
-  const [kind, setKind] = useState('All Results') // All Results | Events | Groups
+const SheetContent = ({ onClose, onApply, events, groups, initialKind = 'All Results' }) => {
+  const [kind, setKind] = useState(initialKind)
   const [query, setQuery] = useState('')
 
   // removed categories
@@ -152,30 +191,45 @@ const SheetContent = ({ onClose, onApply, events, groups }) => {
 
   const wantEvents = kind === 'All Results' || kind === 'Events'
   const wantGroups = kind === 'All Results' || kind === 'Groups'
-  const haveAny = (wantEvents && resultsEvents.length) || (wantGroups && resultsGroups.length)
 
   const railWidth = 320
   const onOverlayClick = (e) => { if (e.target === e.currentTarget) onClose?.() }
 
-  const ResultCard = ({ title, subtitle, right }) => (
+  /* ---------- Small result card with thumbnail ---------- */
+  const ResultCard = ({ title, subtitle, right, thumbUrl }) => (
     <div
       style={{
-        border: '1px solid #F3F4F6', borderRadius: 12, padding: 12,
+        border: '1px solid #F3F4F6', borderRadius: 12, padding: 10,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         gap: 12, background: '#fff'
       }}
     >
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {title}
-        </div>
-        {subtitle ? (
-          <div style={{ fontSize: 12, color: '#6B7280', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {subtitle}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+        <Thumb title={title} url={thumbUrl} />
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontWeight: 600, fontSize: 14, color: '#111827',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+            }}
+          >
+            {title}
           </div>
-        ) : null}
+          {subtitle ? (
+            <div
+              style={{
+                fontSize: 12, color: '#6B7280', marginTop: 2,
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+              }}
+            >
+              {subtitle}
+            </div>
+          ) : null}
+        </div>
       </div>
-      {right ? <div style={{ fontSize: 11, color: '#9CA3AF', whiteSpace: 'nowrap' }}>{right}</div> : null}
+      {right ? (
+        <div style={{ fontSize: 11, color: '#9CA3AF', whiteSpace: 'nowrap' }}>{right}</div>
+      ) : null}
     </div>
   )
 
@@ -197,40 +251,86 @@ const SheetContent = ({ onClose, onApply, events, groups }) => {
         }}
       >
         {/* Header */}
-        <div style={{ position: 'relative', padding: 12, borderBottom: '1px solid #F3F4F6' }}>
-          <div style={{ position: 'relative', paddingRight: 96 }}>
-            <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.6 }}>🔍</div>
+        {/* Header */}
+        <div
+          style={{
+            padding: 12,
+            borderBottom: '1px solid #F3F4F6',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
+          {/* Search bar + button */}
+          <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+            <div
+              style={{
+                position: 'absolute',
+                left: 12,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                opacity: 0.6,
+                pointerEvents: 'none',
+              }}
+            >
+              🔍
+            </div>
+
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); apply() } }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  apply()
+                }
+              }}
               placeholder="Search for events, groups, or interests..."
               style={{
-                width: '100%', padding: '12px 14px 12px 38px',
-                borderRadius: 10, border: '1px solid #E5E7EB', outline: 'none'
+                width: '100%',
+                padding: '12px 14px 12px 38px',
+                borderRadius: 10,
+                border: '1px solid #E5E7EB',
+                outline: 'none',
               }}
             />
-            <button
-              onClick={apply}
-              style={{
-                position: 'absolute', right: 12, top: 6, height: 36,
-                padding: '0 14px', borderRadius: 10, border: 'none',
-                background: '#EC4899', color: '#fff', fontWeight: 600, cursor: 'pointer'
-              }}
-            >
-              Search
-            </button>
           </div>
 
           <button
+            onClick={apply}
+            style={{
+              height: 40,
+              padding: '0 14px',
+              borderRadius: 10,
+              border: 'none',
+              background: '#EC4899',
+              color: '#fff',
+              fontWeight: 600,
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            Search
+          </button>
+
+          {/* Close */}
+          <button
             onClick={onClose}
             style={{
-              position: 'absolute', top: 8, right: 8, border: 'none',
-              background: 'transparent', cursor: 'pointer', padding: 8, fontSize: 18
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              padding: 8,
+              fontSize: 18,
+              flexShrink: 0,
+              lineHeight: 0,
             }}
             aria-label="Close"
-          >×</button>
+          >
+            ×
+          </button>
         </div>
+
 
         {/* Tabs */}
         <div style={{ borderBottom: '1px solid #F3F4F6', padding: '8px 16px', display: 'flex', gap: 8 }}>
@@ -343,11 +443,16 @@ const SheetContent = ({ onClose, onApply, events, groups }) => {
                     {resultsEvents.length ? (
                       <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
                         {resultsEvents.map(ev => (
-                          <div key={ev._id} onClick={() => { /* quick apply with this title */ setQuery(ev.title); apply() }} style={{ cursor: 'pointer' }}>
+                          <div
+                            key={ev._id}
+                            onClick={() => { /* quick apply with this title */ setQuery(ev.title); apply() }}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <ResultCard
                               title={ev.title}
                               subtitle={[ev.groupName, ev.location].filter(Boolean).join(' • ')}
                               right={ev.date ? new Date(ev.date).toLocaleDateString() : undefined}
+                              thumbUrl={ev.image || ev.coverImage || ev.banner || ev.photoUrl || ev.thumbnail}
                             />
                           </div>
                         ))}
@@ -360,11 +465,16 @@ const SheetContent = ({ onClose, onApply, events, groups }) => {
                     {resultsGroups.length ? (
                       <div style={{ display: 'grid', gap: 10 }}>
                         {resultsGroups.map(g => (
-                          <div key={g._id} onClick={() => { setQuery(g.name); apply() }} style={{ cursor: 'pointer' }}>
+                          <div
+                            key={g._id}
+                            onClick={() => { setQuery(g.name); apply() }}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <ResultCard
                               title={g.name}
                               subtitle={(g.membersCount != null ? `${g.membersCount} members` : (g.tags || []).join(', '))}
                               right="Group"
+                              thumbUrl={g.image || g.avatar || g.logo || g.photoUrl || g.thumbnail}
                             />
                           </div>
                         ))}
@@ -379,11 +489,16 @@ const SheetContent = ({ onClose, onApply, events, groups }) => {
                   resultsEvents.length ? (
                     <div style={{ display: 'grid', gap: 10 }}>
                       {resultsEvents.map(ev => (
-                        <div key={ev._id} onClick={() => { setQuery(ev.title); apply() }} style={{ cursor: 'pointer' }}>
+                        <div
+                          key={ev._id}
+                          onClick={() => { setQuery(ev.title); apply() }}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <ResultCard
                             title={ev.title}
                             subtitle={[ev.groupName, ev.location].filter(Boolean).join(' • ')}
                             right={ev.date ? new Date(ev.date).toLocaleDateString() : undefined}
+                            thumbUrl={ev.image || ev.coverImage || ev.banner || ev.photoUrl || ev.thumbnail}
                           />
                         </div>
                       ))}
@@ -397,11 +512,16 @@ const SheetContent = ({ onClose, onApply, events, groups }) => {
                   resultsGroups.length ? (
                     <div style={{ display: 'grid', gap: 10 }}>
                       {resultsGroups.map(g => (
-                        <div key={g._id} onClick={() => { setQuery(g.name); apply() }} style={{ cursor: 'pointer' }}>
+                        <div
+                          key={g._id}
+                          onClick={() => { setQuery(g.name); apply() }}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <ResultCard
                             title={g.name}
                             subtitle={(g.membersCount != null ? `${g.membersCount} members` : (g.tags || []).join(', '))}
                             right="Group"
+                            thumbUrl={g.image || g.avatar || g.logo || g.photoUrl || g.thumbnail}
                           />
                         </div>
                       ))}

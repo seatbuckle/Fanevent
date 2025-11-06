@@ -1,4 +1,3 @@
-
 import { Box, Flex, Text, Badge } from '@chakra-ui/react'
 import { Calendar, MapPin, Users } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -10,11 +9,23 @@ const EventCard = ({ event }) => {
 
   const formatDate = (dateString) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { 
+    return date.toLocaleDateString('en-US', {
       weekday: 'short',
-      month: 'short', 
-      day: 'numeric'
+      month: 'short',
+      day: 'numeric',
     })
+  }
+
+  const go = () => {
+    navigate(`/events/${event._id}`)
+    window.scrollTo(0, 0)
+  }
+
+  const onKey = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      go()
+    }
   }
 
   return (
@@ -32,9 +43,14 @@ const EventCard = ({ event }) => {
       position="relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      _hover={{ 
-        transform: 'translateY(-8px)', 
-        boxShadow: '0 20px 40px rgba(59, 130, 246, 0.15)'
+      _hover={{ transform: 'translateY(-8px)', boxShadow: '0 20px 40px rgba(59, 130, 246, 0.15)' }}
+      onClick={go}
+      role="link"
+      tabIndex={0}
+      onKeyDown={onKey}
+      _focusVisible={{
+        outline: '2px solid #EC4899',
+        outlineOffset: '2px',
       }}
     >
       {/* Soft aura on hover */}
@@ -51,12 +67,7 @@ const EventCard = ({ event }) => {
         zIndex={-1}
       />
 
-      <Box
-        position="relative"
-        h="160px"
-        overflow="hidden"
-        onClick={() => { navigate(`/events/${event._id}`); scrollTo(0, 0) }}
-      >
+      <Box position="relative" h="160px" overflow="hidden">
         <Box
           as="img"
           src={event.image}
@@ -66,6 +77,8 @@ const EventCard = ({ event }) => {
           objectFit="cover"
           transition="transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
           transform={isHovered ? 'scale(1.1)' : 'scale(1)'}
+          draggable={false}
+          pointerEvents="none" /* image won't steal clicks */
         />
       </Box>
 
@@ -104,6 +117,7 @@ const EventCard = ({ event }) => {
               py={0.5}
               borderRadius="md"
               fontWeight="medium"
+              pointerEvents="none" /* badges won't intercept clicks */
             >
               {tag}
             </Badge>

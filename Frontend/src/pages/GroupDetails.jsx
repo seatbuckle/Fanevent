@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
+import useGroupMemberships from '@/hooks/useGroupMemberships'
 import {
   Box,
   Flex,
@@ -28,10 +30,13 @@ const Separator = (props) => (
 const GroupDetails = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useUser()
+  const { isMember, join, leave } = useGroupMemberships(user?.id)
+  
+
 
   const [group, setGroup] = useState(null)
-  const [activeTab, setActiveTab] = useState('events') // 'events' | 'members' | 'about'
-  const [isMember, setIsMember] = useState(false)
+  const [activeTab, setActiveTab] = useState('events')
 
   useEffect(() => {
     const g = dummyGroupsData.find((x) => x._id === id)
@@ -52,9 +57,10 @@ const GroupDetails = () => {
   const handleReport = () =>
     toast('Report submitted – thank you!', { icon: '⚠️' })
 
+  const joined = isMember(group._id)
   const handleJoinLeave = () => {
-    setIsMember((m) => !m)
-    toast.success(isMember ? 'Left group.' : 'Joined group!')
+    joined ? leave(group._id) : join(group._id)
+    toast.success(joined ? 'Left group.' : 'Joined group!')
   }
 
   const formatLongDate = (d) =>
@@ -67,7 +73,6 @@ const GroupDetails = () => {
 
   return (
     <Box pt="88px" pb={16} bg="gray.50" minH="100vh">
-      <Toaster />
       <Box px={{ base: 6, md: 12, lg: 20, xl: 32 }}>
         {/* Back */}
         <Button
@@ -130,26 +135,38 @@ const GroupDetails = () => {
               </Box>
 
               <Flex align="center" gap={2}>
-                <IconButton
-                  aria-label="Report group"
-                  variant="ghost"
-                  color="white"
-                  onClick={handleReport}
-                  _hover={{ bg: 'whiteAlpha.300' }}
-                >
-                  <Flag size={18} />
-                </IconButton>
-                <Button
-                  bg="#EC4899"
-                  color="white"
-                  size="sm"
-                  px={5}
-                  onClick={handleJoinLeave}
-                  _hover={{ bg: '#C7327C' }}
-                >
-                  {isMember ? 'Leave Group' : 'Join Group'}
-                </Button>
-              </Flex>
+              <IconButton
+                aria-label="Report group"
+                variant="ghost"
+                color="white"
+                onClick={handleReport}
+                _hover={{ bg: 'whiteAlpha.300' }}
+              >
+                <Flag size={18} />
+              </IconButton>
+
+              <Button
+                size="sm"
+                px={5}
+                onClick={handleJoinLeave}
+                _hover={{ bg: joined ? 'gray.200' : '#C7327C' }}
+                transition="all 0.2s ease"
+                {...(joined
+                  ? {
+                      bg: 'gray.100',
+                      color: 'gray.700',
+                      _hover: { bg: 'gray.200' },
+                    }
+                  : {
+                      bg: '#EC4899',
+                      color: 'white',
+                      _hover: { bg: '#C7327C' },
+                    })}
+              >
+                {joined ? 'Leave Group' : 'Join Group'}
+              </Button>
+            </Flex>
+
             </Flex>
           </Box>
 
@@ -211,6 +228,12 @@ const GroupDetails = () => {
 /* ----------------- Sections ----------------- */
 
 const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
+  // helper to neatly truncate text
+  const truncate = (text = '', maxLen = 80) => {
+    if (!text) return ''
+    return text.length > maxLen ? text.slice(0, maxLen - 3).trim() + '...' : text
+  }
+
   return (
     <Box>
       <Text fontSize="lg" fontWeight="semibold" mb={4} color="gray.800">
@@ -238,22 +261,23 @@ const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
             borderRadius="xl"
             overflow="hidden"
             boxShadow="sm"
+            cursor="pointer"
+            transition="all 0.25s ease"
+            _hover={{ transform: 'translateY(-4px)', boxShadow: '0 12px 28px rgba(0,0,0,0.08)' }}
+            onClick={() => {
+              navigate(`/events/${e._id}`)
+              window.scrollTo(0, 0)
+            }}
+            role="link"
+            tabIndex={0}
+            _focusVisible={{ outline: '2px solid #EC4899', outlineOffset: '2px' }}
           >
             <Grid
-              templateColumns={{ base: '1fr', md: '320px 1fr' }}
+              templateColumns={{ base: '1fr', md: '360px 1fr' }} // larger image width
               alignItems="stretch"
             >
               {/* Thumbnail */}
-              <Box
-                position="relative"
-                h={{ base: '180px', md: '180px' }}
-                overflow="hidden"
-                cursor="pointer"
-                onClick={() => {
-                  navigate(`/events/${e._id}`)
-                  scrollTo(0, 0)
-                }}
-              >
+              <Box position="relative" h={{ base: '100px', md: '250px' }} overflow="hidden">
                 <Box
                   as="img"
                   src={e.image}
@@ -267,9 +291,9 @@ const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
               </Box>
 
               {/* Body */}
-              <Box p={{ base: 4, md: 5 }}>
-                <Flex justify="space-between" align="start" mb={1}>
-                  <Text fontWeight="semibold" color="gray.800">
+              <Box p={{ base: 4, md: 5 }} display="flex" flexDir="column">
+                <Flex justify="space-between" align="start" mb={2}>
+                  <Text fontWeight="semibold" color="gray.800" fontSize="lg" noOfLines={1}>
                     {e.title}
                   </Text>
                   <IconButton
@@ -298,11 +322,17 @@ const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
                   </Flex>
                 </Flex>
 
-                <Text color="gray.700" fontSize="sm" noOfLines={3} mb={3} lineHeight="1.6">
-                  {e.description}
+                <Text
+                  color="gray.700"
+                  fontSize="sm"
+                  mb={3}
+                  lineHeight="1.6"
+                  noOfLines={4} // Chakra’s native truncation for multi-line
+                >
+                  {truncate(e.description, 200)}
                 </Text>
 
-                <Flex gap={2} flexWrap="wrap" align="center">
+                <Flex gap={2} flexWrap="wrap" align="center" mt="auto">
                   <TagIcon size={14} color="#EC4899" />
                   {(e.tags || []).slice(0, 4).map((t, i) => (
                     <Badge
@@ -327,6 +357,7 @@ const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
     </Box>
   )
 }
+
 
 const MembersSection = ({ members }) => {
   return (

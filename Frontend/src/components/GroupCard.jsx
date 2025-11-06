@@ -1,4 +1,4 @@
-import { Box, Flex, Text, Badge, Button } from '@chakra-ui/react'
+import { Box, Flex, Text, Badge } from '@chakra-ui/react'
 import { Users } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
@@ -6,6 +6,18 @@ import { useState } from 'react'
 const GroupCard = ({ group }) => {
   const navigate = useNavigate()
   const [isHovered, setIsHovered] = useState(false)
+
+  const go = () => {
+    navigate(`/groups/${group._id}`)
+    window.scrollTo(0, 0)
+  }
+
+  const onKey = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      go()
+    }
+  }
 
   return (
     <Box
@@ -16,19 +28,23 @@ const GroupCard = ({ group }) => {
       transition="all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
       cursor="pointer"
       w="full"
-      /* 👇 Match EventCard responsive sizing */
       flex={{ base: '1 1 100%', sm: '0 0 calc(50% - 10px)', lg: '0 0 280px' }}
       maxW={{ base: '100%', sm: 'calc(50% - 10px)', lg: '280px' }}
       minW={{ base: '100%', sm: 'calc(50% - 10px)', lg: '280px' }}
       position="relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      _hover={{
-        transform: 'translateY(-8px)',
-        boxShadow: '0 20px 40px rgba(59, 130, 246, 0.15)',
+      _hover={{ transform: 'translateY(-8px)', boxShadow: '0 20px 40px rgba(59, 130, 246, 0.15)' }}
+      onClick={go}
+      role="link"
+      tabIndex={0}
+      onKeyDown={onKey}
+      _focusVisible={{
+        outline: '2px solid #EC4899',
+        outlineOffset: '2px',
       }}
     >
-      {/* Soft aura on hover (same as EventCard) */}
+      {/* Soft aura on hover */}
       <Box
         position="absolute"
         top="-20px"
@@ -42,16 +58,8 @@ const GroupCard = ({ group }) => {
         zIndex={-1}
       />
 
-      {/* 👇 Match EventCard media height (160px) */}
-      <Box
-        position="relative"
-        h="160px"
-        overflow="hidden"
-        onClick={() => {
-          navigate(`/groups/${group._id}`)
-          scrollTo(0, 0)
-        }}
-      >
+      {/* Media */}
+      <Box position="relative" h="160px" overflow="hidden">
         <Box
           as="img"
           src={group.image}
@@ -61,6 +69,8 @@ const GroupCard = ({ group }) => {
           objectFit="cover"
           transition="transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
           transform={isHovered ? 'scale(1.1)' : 'scale(1)'}
+          draggable={false}
+          pointerEvents="none"
         />
         <Badge
           position="absolute"
@@ -73,12 +83,13 @@ const GroupCard = ({ group }) => {
           py={1}
           borderRadius="full"
           fontWeight="medium"
+          pointerEvents="none"
         >
           {group.category}
         </Badge>
       </Box>
 
-      {/* 👇 Match EventCard body layout/height */}
+      {/* Body */}
       <Box p={4} h="200px" display="flex" flexDir="column">
         <Text fontSize="xs" color="gray.500" fontWeight="medium" mb={1.5}>
           {group.category}
@@ -97,23 +108,16 @@ const GroupCard = ({ group }) => {
           <Text>{group.members.toLocaleString()} members</Text>
         </Flex>
 
-        {/* Push the CTA to the bottom for consistent height */}
-        <Flex justify="flex-end" mt="auto">
-          <Button
-            size="xs"
-            variant="link"
-            color="#EC4899"
-            fontWeight="medium"
-            fontSize="xs"
-            onClick={() => {
-              navigate(`/groups/${group._id}`)
-              scrollTo(0, 0)
-            }}
-            _hover={{ color: '#C7327C' }}
-          >
-            View Group
-          </Button>
-        </Flex>
+        {/* (Optional) CTA text that doesn't steal clicks */}
+        <Text
+          mt="auto"
+          fontSize="xs"
+          color="#EC4899"
+          fontWeight="medium"
+          pointerEvents="none"
+        >
+          View Group →
+        </Text>
       </Box>
     </Box>
   )

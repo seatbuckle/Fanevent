@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
 import { Box, Flex, Text, Button, Badge, IconButton, Grid } from '@chakra-ui/react'
 import {
   Calendar,
@@ -18,13 +19,48 @@ import {
   PlayCircle,
 } from 'lucide-react'
 import ReactPlayer from 'react-player' // keep for non-YouTube
-import { dummyEventsData } from '../assets/assets'
+import { dummyEventsData, dummyGroupsData } from '../assets/assets'
 import EventCard from '@/components/EventCard'
 import toast, { Toaster } from 'react-hot-toast'
+import useGroupMemberships from '@/hooks/UseGroupMemberships'
+
+// --- HostedBy helpers ---
+const slugify = (s = '') =>
+  s.toString().trim().toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+
+const getInitials = (s = '') => {
+  const parts = s.trim().split(/\s+/)
+  const a = parts[0]?.[0] || ''
+  const b = parts.length > 1 ? parts[parts.length - 1]?.[0] || '' : ''
+  return (a + b).toUpperCase()
+}
+
+// Find the host group from assets using the event fields you have.
+// Priority: event.groupId -> name/category match -> null
+const findHostGroup = (ev) => {
+  if (!ev) return null
+  if (ev.groupId) {
+    const byId = dummyGroupsData.find(g => g._id === ev.groupId)
+    if (byId) return byId
+  }
+  const name = ev.groupName || ev.category
+  if (name) {
+    const byName = dummyGroupsData.find(g => g.name?.toLowerCase() === name.toLowerCase())
+    if (byName) return byName
+  }
+  return null
+}
+
+
 
 const EventDetails = () => {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useUser()
+  const { isMember, join, leave } = useGroupMemberships(user?.id)
   
   const [event, setEvent] = useState(null)
   const [isLiked, setIsLiked] = useState(false)
@@ -34,7 +70,6 @@ const EventDetails = () => {
   const [checkInTime, setCheckInTime] = useState(null)
   const [hoursLogged, setHoursLogged] = useState(null)
   const [hasSkipped, setHasSkipped] = useState(false)
-  const [hasJoinedGroup, setHasJoinedGroup] = useState(false)
   const [isMediaOpen, setIsMediaOpen] = useState(false)
   const [selectedMedia, setSelectedMedia] = useState(null)
   const [rsvpEvents, setRsvpEvents] = useState([])
@@ -167,7 +202,6 @@ const EventDetails = () => {
 
   return (
     <>
-      <Toaster />
       <Box pt="80px" pb={16} bg="gray.50" minH="100vh">
         <Box px={{ base: 6, md: 12, lg: 20, xl: 32 }}>
           <Button variant="ghost" color="gray.600" mb={6} onClick={() => navigate(-1)} _hover={{ bg: 'gray.100' }}>
@@ -550,27 +584,47 @@ const EventDetails = () => {
                   >
                     <X size={24} />
                   </IconButton>
-                  
+
                   {selectedMedia.type === 'image' ? (
-                    <Box 
-                      as="img" 
-                      src={selectedMedia.url} 
-                      maxH="85vh" 
-                      maxW="90vw" 
+                    <Box
+                      w="90vw"
+                      maxW="1200px"
                       onClick={(e) => e.stopPropagation()}
-                      borderRadius="lg"
-                    />
+                      display="flex"
+                      flexDirection="column"
+                      gap={3}
+                      alignItems="center"
+                    >
+                      <Box
+                        as="img"
+                        src={selectedMedia.url}
+                        alt={selectedMedia.title || 'Image'}
+                        maxH="75vh"
+                        maxW="100%"
+                        borderRadius="lg"
+                        objectFit="contain"
+                      />
+                      <Box color="white" textAlign="center">
+                        <Text fontSize="lg" fontWeight="semibold">
+                          {selectedMedia.title || 'Image'}
+                        </Text>
+                        {selectedMedia.by && (
+                          <Text fontSize="sm" color="gray.300">
+                            By: {selectedMedia.by}
+                          </Text>
+                        )}
+                      </Box>
+                    </Box>
                   ) : (
-                    <Box 
-                      w="90vw" 
-                      maxW="1200px" 
+                    <Box
+                      w="90vw"
+                      maxW="1200px"
                       onClick={(e) => e.stopPropagation()}
                       display="flex"
                       flexDirection="column"
                       gap={3}
                     >
                       <Box borderRadius="lg" overflow="hidden" bg="black">
-                        {/* --- HARD FIX: native YouTube iframe; fall back to ReactPlayer for non-YouTube --- */}
                         {isYouTube(selectedMedia.url) ? (
                           <Box
                             as="iframe"
@@ -619,31 +673,103 @@ const EventDetails = () => {
               </Box>
 
               {/* HOST INFO */}
-              <Box bg="white" borderRadius="2xl" p={6} boxShadow="sm">
-                <Text fontSize="sm" fontWeight="semibold" mb={4}>
-                  Hosted by
-                </Text>
-                <Text fontSize="lg" fontWeight="semibold" mb={3}>
-                  {event.category}
-                </Text>
-                <Button
-                  w="100%"
-                  bg={hasJoinedGroup ? 'gray.100' : '#EC4899'}
-                  color={hasJoinedGroup ? 'gray.700' : 'white'}
-                  onClick={handleJoinGroup}
-                  _hover={{ bg: hasJoinedGroup ? 'gray.200' : '#C7327C' }}
-                  transition="all 0.3s ease"
-                >
-                  {hasJoinedGroup ? (
-                    'Leave Group'
-                  ) : (
-                    <>
-                      <Heart size={18} style={{ marginRight: '8px' }} />
-                      Join Group
-                    </>
-                  )}
-                </Button>
-              </Box>
+              {/* HOSTED BY (modern, data-backed, clickable) */}
+              {(() => {
+                const host = findHostGroup(event)
+                const title = host?.name || event.groupName || event.category || 'Group'
+                const gid = host?._id || event.groupId || slugify(title)
+                const thumb = host?.image || event.groupImage || event.groupAvatar || event.groupLogo || null
+                const memberCount = host?.members ?? event.groupMembers ?? event.members ?? event.attendees ?? 0
+                const groupLocation = host?.location || event.groupLocation
+                const joined = isMember(gid)
+
+                return (
+                  <Box
+                    role="link"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate(`/groups/${gid}`); window.scrollTo(0, 0)
+                      }
+                    }}
+                    onClick={() => { navigate(`/groups/${gid}`); window.scrollTo(0, 0) }}
+                    bg="white"
+                    borderRadius="2xl"
+                    p={0}
+                    boxShadow="sm"
+                    overflow="hidden"
+                    transition="transform 0.2s ease, box-shadow 0.2s ease"
+                    _hover={{ transform: 'translateY(-4px)', boxShadow: '0 16px 36px rgba(0,0,0,0.12)' }}
+                    _focusVisible={{ outline: '2px solid #EC4899', outlineOffset: '2px' }}
+                  >
+                    {/* Accent bar */}
+                    <Box h="6px" bgGradient="linear(to-r, pink.400, purple.400)" />
+
+                    <Flex p={5} align="center" gap={4}>
+                      {/* Avatar */}
+                      <Box w="56px" h="56px" borderRadius="lg" overflow="hidden" flexShrink={0} bg="gray.100">
+                        {thumb ? (
+                          <Box as="img" src={thumb} alt={title} w="100%" h="100%" objectFit="cover" />
+                        ) : (
+                          <Flex
+                            w="100%" h="100%" align="center" justify="center"
+                            bgGradient="linear(135deg, pink.100, purple.100)"
+                            color="gray.800" fontWeight="bold" fontSize="sm"
+                          >
+                            {getInitials(title)}
+                          </Flex>
+                        )}
+                      </Box>
+
+                      {/* Textual */}
+                      <Box flex="1" minW={0}>
+                        <Text fontSize="xs" color="gray.500" fontWeight="semibold" mb={1}>
+                          Hosted by
+                        </Text>
+                        <Text fontSize="lg" fontWeight="semibold" noOfLines={1}>
+                          {title}
+                        </Text>
+
+                        <Flex gap={2} mt={1} wrap="wrap">
+                          {groupLocation && (
+                            <Badge bg="gray.100" color="gray.700" borderRadius="full" px={2} py={0.5} fontSize="10px">
+                              <MapPin size={12} style={{ marginRight: 4 }} /> {groupLocation}
+                            </Badge>
+                          )}
+                          <Badge bg="gray.100" color="gray.700" borderRadius="full" px={2} py={0.5} fontSize="10px">
+                            <Users size={12} style={{ marginRight: 4 }} />
+                            {memberCount.toLocaleString()} members
+                          </Badge>
+                        </Flex>
+                      </Box>
+
+                      {/* Right-side action area: stop propagation so it won't navigate */}
+                      <Flex direction="column" align="flex-end" gap={4} pl={2}>
+                        <Button
+                          size="sm"
+                          bg={joined ? 'gray.100' : '#EC4899'}
+                          color={joined ? 'gray.700' : 'white'}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            joined ? leave(gid) : join(gid)
+                            toast.success(joined ? 'Left group.' : 'Joined group!')
+                          }}
+                          _hover={{ bg: joined ? 'gray.200' : '#C7327C' }}
+                        >
+                          {joined ? 'Leave' : 'Join'}
+                        </Button>
+                        <Text fontSize="xs" color="gray.400" pr={1} pointerEvents="none">
+                          View group →
+                        </Text>
+                      </Flex>
+                    </Flex>
+                  </Box>
+                )
+              })()}
+
+
+
             </Box>
           </Flex>
         </Box>
