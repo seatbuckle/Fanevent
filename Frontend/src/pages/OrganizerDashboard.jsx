@@ -832,6 +832,50 @@ const selectGroup = (g) => {
         </GridItem>
         </Grid>
 
+        {/* Date & Time */}
+        <Grid templateColumns={{ base: "1fr", md: "1fr 1fr 1fr" }} gap={4} mt={2}>
+        <GridItem>
+            <Text fontSize="sm" fontWeight="medium" mb={2}>
+            Date *
+            </Text>
+            <Input
+            name="date"
+            type="date"
+            value={form.date}
+            onChange={(e) => setForm((s) => ({ ...s, date: e.target.value }))}
+            rounded="lg"
+            aria-required="true"
+            />
+        </GridItem>
+
+        <GridItem>
+            <Text fontSize="sm" fontWeight="medium" mb={2}>
+            Start Time (optional)
+            </Text>
+            <Input
+            name="startTime"
+            type="time"
+            value={form.startTime}
+            onChange={(e) => setForm((s) => ({ ...s, startTime: e.target.value }))}
+            rounded="lg"
+            />
+        </GridItem>
+
+        <GridItem>
+            <Text fontSize="sm" fontWeight="medium" mb={2}>
+            End Time (optional)
+            </Text>
+            <Input
+            name="endTime"
+            type="time"
+            value={form.endTime}
+            onChange={(e) => setForm((s) => ({ ...s, endTime: e.target.value }))}
+            rounded="lg"
+            />
+        </GridItem>
+        </Grid>
+
+
 
             {/* Location */}
             <Box>
