@@ -3,8 +3,8 @@ import express from "express";
 import OrganizerApplication from "../models/OrganizerApplication.js";
 import User from "../models/User.js"; // if you have one
 import Group from "../models/Groups.js";
-import Event from "../models/Event.js";
-import { requireRole } from "../../middleware/roles.js";
+import Event from "../models/Event.js"; 
+import { requireRole } from "../../middleware/requireRole.js"; 
 
 const router = express.Router();
 

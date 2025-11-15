@@ -15,4 +15,3 @@ r.get("/:id", async (req, res) => {
 });
 
 export default r;
-a

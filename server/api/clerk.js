@@ -1,4 +1,6 @@
-// server/api/clerk.js
-import { Clerk } from '@clerk/clerk-sdk-node';
+// server/api/clerk.js  (ESM file)
+import { createClerkClient } from '@clerk/backend';
 
-export const clerk = new Clerk({ secretKey: process.env.CLERK_SECRET_KEY });
+export const clerk = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+});

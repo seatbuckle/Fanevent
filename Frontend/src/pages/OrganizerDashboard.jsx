@@ -17,8 +17,8 @@ import {
   GridItem,
   Separator,
 } from "@chakra-ui/react";
-import { useUser } from "@clerk/clerk-react";
-import { useNavigate } from "react-router-dom";
+import { useUser } from "@clerk/clerk-react"; 
+import { useNavigate } from "react-router-dom"; 
 import toast from "react-hot-toast";
 import { api } from "../lib/api";
 import CreateGroupModal from "@/components/CreateGroupModal";

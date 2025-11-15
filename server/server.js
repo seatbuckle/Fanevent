@@ -4,28 +4,28 @@ import cors from 'cors';
 import 'dotenv/config';
 import { serve } from 'inngest/express';
 import { clerkMiddleware, requireAuth } from '@clerk/express';
-import { ensureRoleDefault } from '../middleware/ensureRoleDefault.js'; 
+import { ensureRoleDefault } from './middleware/ensureRoleDefault.js'; 
 
 
 // Adjust these import paths to your tree:
-import connectDB from './config/db.js';
-import { inngest, functions } from './inngest/index.js';
-import organizerApplicationsRouter from "./routes/organizerApplications.routes.js";
-import adminOrganizerAppsRouter from "./routes/admin.organizerApplications.routes.js";
-import adminUsers from "./routes/admin.users.routes.js";
-import adminStats from "./routes/admin.stats.routes.js";
-import eventsPublic from "./routes/events.public.js";
-import eventsOrganizer from "./routes/events.organizer.js";
-import eventsAdmin from "./routes/events.admin.js";
-import engagement from "./routes/engagement.js";
-import socialRouter from "./routes/events.social.js";
-import groupsPublic from "./routes/groups.public.js";
-import groupsOrganizer from "./routes/groups.organizer.js";
-import groupsAdmin from "./routes/groups.admin.js";
+import connectDB from './Backend/config/db.js';
+import { inngest, functions } from './Backend/inngest/index.js'; 
+import organizerApplicationsRouter from "./Backend/routes/organizerApplications.routes.js";
+import adminOrganizerAppsRouter from "./Backend/routes/admin.organizerApplications.routes.js";
+import adminUsers from "./Backend/routes/admin.users.routes.js";
+import adminStats from "./Backend/routes/admin.stats.routes.js";
+import eventsPublic from "./Backend/routes/events.public.js";
+import eventsOrganizer from "./Backend/routes/events.organizer.js";
+import eventsAdmin from "./Backend/routes/events.admin.js";
+import engagement from "./Backend/routes/engagement.js";
+import socialRouter from "./Backend/routes/events.social.js";
+import groupsPublic from "./Backend/routes/groups.public.js";
+import groupsOrganizer from "./Backend/routes/groups.organizer.js";
+import groupsAdmin from "./Backend/routes/groups.admin.js";
 
 
 // Clerk server SDK instance
-import { clerk } from '../api/clerk.js';
+import { clerk } from './api/clerk.js'; 
 
 const app = express();
 
