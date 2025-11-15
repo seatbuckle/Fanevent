@@ -1,85 +1,157 @@
-// pages/Events.jsx
-import { useMemo, useState } from 'react'
-import { Box, Text, Flex } from '@chakra-ui/react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { dummyEventsData, dummyGroupsData } from '../assets/assets'
-import EventCard from '@/components/EventCard'
-import AdvancedSearchSheet from '@/components/AdvancedSearchModal'
+// src/pages/Events.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Box, Text, Flex } from "@chakra-ui/react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import EventCard from "@/components/EventCard";
+import AdvancedSearchSheet from "@/components/AdvancedSearchModal";
 
-const normalize = (s) => (s || '').toString().toLowerCase()
-const cleanText = (s = '') => s.replace(/\s+/g, ' ').trim()
-const truncate = (s = '', n = 48) => (s.length > n ? s.slice(0, n - 1) + '…' : s)
+const normalize = (s) => (s || "").toString().toLowerCase();
+const cleanText = (s = "") => s.replace(/\s+/g, " ").trim();
+const truncate = (s = "", n = 48) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
 
-const inDateWindow = (eventDate, filters) => {
-  if (!filters.length) return true
-  const d = new Date(eventDate)
-  if (Number.isNaN(d.getTime())) return true
+const inDateWindow = (when, filters) => {
+  if (!filters?.length) return true;
+  const d = new Date(when);
+  if (Number.isNaN(d.getTime())) return true;
 
-  const now = new Date()
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
-  const day = startOfDay.getDay() || 7
-  const startOfWeek = new Date(startOfDay); startOfWeek.setDate(startOfDay.getDate() - (day - 1))
-  const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 7)
+  const day = startOfDay.getDay() || 7;
+  const startOfWeek = new Date(startOfDay);
+  startOfWeek.setDate(startOfDay.getDate() - (day - 1));
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 7);
 
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const time = d.getTime()
+  const t = d.getTime();
+  return filters
+    .map((f) => f.toLowerCase())
+    .every((f) => {
+      if (f === "today") return t >= startOfDay.getTime() && t < endOfDay.getTime();
+      if (f === "this week") return t >= startOfWeek.getTime() && t < endOfWeek.getTime();
+      if (f === "this month") return t >= startOfMonth.getTime() && t < endOfMonth.getTime();
+      return true;
+    });
+};
 
-  const checks = filters.map(f => f.toLowerCase()).map(f => {
-    if (f === 'today') return time >= startOfDay.getTime() && time < endOfDay.getTime()
-    if (f === 'this week') return time >= startOfWeek.getTime() && time < endOfWeek.getTime()
-    if (f === 'this month') return time >= startOfMonth.getTime() && time < endOfMonth.getTime()
-    return true
-  })
-
-  return checks.every(Boolean)
+async function fetchJson(url, opts = {}, signal) {
+  const res = await fetch(url, { ...opts, signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
 }
 
 const Events = () => {
-  const [params] = useSearchParams()
-  const navigate = useNavigate()
-  const [open, setOpen] = useState(false)
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
 
-  const q = normalize(params.get('q') || '')
-  const type = params.get('type') || ''
-  const categories = (params.get('categories') || '').split(',').filter(Boolean)
-  const tags = (params.get('tags') || '').split(',').filter(Boolean)
-  const dates = (params.get('dates') || '').split(',').filter(Boolean)
+  const q = normalize(params.get("q") || "");
+  const type = params.get("type") || "";
+  const tags = (params.get("tags") || "").split(",").filter(Boolean);
+  const dates = (params.get("dates") || "").split(",").filter(Boolean);
+
+  // live data
+  const [events, setEvents] = useState([]);
+  const [groups, setGroups] = useState([]); // for modal suggestions
+  const [loading, setLoading] = useState(false);
+  const abortRef = useRef(null);
+
+  // server fetch (with fallback to client filtering)
+  useEffect(() => {
+    let mounted = true;
+    if (abortRef.current) abortRef.current.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    const run = async () => {
+      setLoading(true);
+      try {
+        // Try server-side filtered first (supports either ?query= or ?q=)
+        const qp = new URLSearchParams();
+        if (q) qp.set("query", q);
+        if (tags.length) qp.set("tags", tags.join(","));
+        if (dates.length) qp.set("dates", dates.join(",")); // backend may ignore; we’ll filter client-side anyway
+        const url = `/api/events?${qp.toString()}`;
+
+        let list = [];
+        try {
+          const data = await fetchJson(url, {}, ctrl.signal);
+          list = Array.isArray(data) ? data : data?.items || [];
+        } catch {
+          // fallback to unfiltered list and filter locally
+          const data = await fetchJson("/api/events", {}, ctrl.signal);
+          list = Array.isArray(data) ? data : data?.items || [];
+        }
+
+        // Load groups for the modal (best-effort)
+        let groupList = [];
+        try {
+          const g = await fetchJson("/api/groups?limit=100", {}, ctrl.signal);
+          groupList = Array.isArray(g) ? g : g?.items || [];
+        } catch {
+          // ignore
+        }
+
+        if (mounted) {
+          setEvents(list);
+          setGroups(groupList);
+        }
+      } catch {
+        if (mounted) {
+          setEvents([]);
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      mounted = false;
+      ctrl.abort();
+    };
+  }, [q, tags.join(","), dates.join(",")]);
 
   const handleApplySearch = (filters) => {
-    const qp = new URLSearchParams()
-    if (filters.query) qp.set('q', filters.query)
-    if (filters.tags?.length) qp.set('tags', filters.tags.join(','))
-    if (filters.dates?.length) qp.set('dates', filters.dates.join(','))
-    // force events
-    qp.set('type', 'events')
-    navigate(`/events?${qp.toString()}`)
-  }
+    const qp = new URLSearchParams();
+    if (filters.query) qp.set("q", filters.query);
+    if (filters.tags?.length) qp.set("tags", filters.tags.join(","));
+    if (filters.dates?.length) qp.set("dates", filters.dates.join(","));
+    qp.set("type", "events");
+    navigate(`/events?${qp.toString()}`);
+  };
 
+  // client filter (works whether server filtered or not)
   const filtered = useMemo(() => {
-    return (dummyEventsData || []).filter(evt => {
+    return (events || []).filter((evt) => {
       const hay = [
-        evt.title, evt.location, evt.groupName,
-        ...(evt.tags || []), ...(evt.categories || []), evt.description,
-      ].map(normalize).join(' | ')
+        evt.title,
+        evt.locationName || evt.location,
+        evt.group || evt.groupName || evt.category,
+        ...(evt.tags || []),
+        evt.category,
+        evt.description,
+      ]
+        .map(normalize)
+        .join(" | ");
 
-      const textOK = q ? hay.includes(q) || hay.indexOf(q) !== -1 : true
+      const textOK = q ? hay.includes(q) || hay.indexOf(q) !== -1 : true;
 
-      const cats = (evt.categories || []).map(normalize)
-      const catOK = categories.length ? categories.every(c => cats.includes(normalize(c))) : true
+      const tg = (evt.tags || []).map(normalize);
+      const tagsOK = tags.length ? tags.every((t) => tg.includes(normalize(t))) : true;
 
-      const tg = (evt.tags || []).map(normalize)
-      const tagsOK = tags.length ? tags.every(t => tg.includes(normalize(t))) : true
+      const when = evt.startAt || evt.date;
+      const dateOK = inDateWindow(when, dates);
 
-      const dateOK = inDateWindow(evt.date, dates)
-      const typeOK = type ? type === 'events' : true
+      const typeOK = type ? type === "events" : true;
 
-      return textOK && catOK && tagsOK && dateOK && typeOK
-    })
-  }, [q, type, categories, tags, dates])
+      return textOK && tagsOK && dateOK && typeOK;
+    });
+  }, [events, q, type, tags, dates]);
 
   return (
     <Box pt="120px" pb={16} bg="gray.50" minH="100vh">
@@ -103,12 +175,12 @@ const Events = () => {
             maxW="720px"
             w="100%"
             cursor="pointer"
-            _hover={{ borderColor: 'pink.300', boxShadow: 'md' }}
+            _hover={{ borderColor: "pink.300", boxShadow: "md" }}
           >
             <Flex align="center" gap={3} color="gray.500">
               <Box>🔍</Box>
               <Text fontSize="sm" flex="1" noOfLines={1}>
-                {params.get('q') ? `Search events… (${params.get('q')})` : 'Search events…'}
+                {q ? `Search events… (${cleanText(params.get("q") || "")})` : "Search events…"}
               </Text>
               <Box
                 px="8px"
@@ -148,31 +220,35 @@ const Events = () => {
               overflow="hidden"
               display="inline-block"
             >
-              {truncate(cleanText(params.get('q') || ''))}
+              {truncate(cleanText(params.get("q") || ""))}
             </Box>
           </Box>
         )}
 
         <Flex gap={5} flexWrap="wrap" justify="center" align="center">
-          {filtered.length ? (
+          {loading ? (
+            <Text color="gray.500" mt={10}>Loading…</Text>
+          ) : filtered.length ? (
             filtered.map((event) => <EventCard key={event._id} event={event} />)
           ) : (
-            <Text color="gray.500" mt={20}>No events match your filters.</Text>
+            <Text color="gray.500" mt={20}>
+              No events match your filters.
+            </Text>
           )}
         </Flex>
       </Box>
 
-      {/* Local overlay instance preset to Events */}
+      {/* Advanced search with live data */}
       <AdvancedSearchSheet
         isOpen={open}
         onClose={() => setOpen(false)}
         onApply={handleApplySearch}
-        events={dummyEventsData || []}
-        groups={dummyGroupsData || []}
+        events={events}
+        groups={groups}
         initialKind="Events"
       />
     </Box>
-  )
-}
+  );
+};
 
-export default Events
+export default Events;

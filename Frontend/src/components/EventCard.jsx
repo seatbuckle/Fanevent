@@ -1,22 +1,50 @@
 import { Box, Flex, Text, Badge } from '@chakra-ui/react'
 import { Calendar, MapPin, Users } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 
-const EventCard = ({ event }) => {
+const EventCard = ({ event = {} }) => {
   const navigate = useNavigate()
   const [isHovered, setIsHovered] = useState(false)
 
+  // --- Normalize inputs defensively ---
+  const startDate = event.startAt || event.date || event.startsAt || event.startDate || null
+  const locationText = useMemo(() => {
+    // Accept either a single field or structured address
+    const inline = event.location || event.locationName
+    const composed = [event.address, event.city, event.state, event.zipCode]
+      .filter(Boolean)
+      .join(', ')
+    const text = inline || composed
+    return (text || '').trim()
+  }, [event.location, event.locationName, event.address, event.city, event.state, event.zipCode])
+
+  // Accept attendeesCount/rsvpCount/attendees, or default 0
+  const attendeesCount = (() => {
+    const x =
+      event.attendees ??
+      event.attendeesCount ??
+      event.rsvpCount ??
+      event.rsvps ??
+      0
+    // If it's an array, use its length; otherwise coerce to number
+    return Array.isArray(x) ? x.length : Number(x) || 0
+  })()
+
   const formatDate = (dateString) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
+    const d = dateString ? new Date(dateString) : null
+    if (!d || Number.isNaN(d.getTime())) return 'TBD'
+    return d.toLocaleDateString('en-US', {
+      // "the day the event is on" = actual weekday/month/day
       weekday: 'short',
       month: 'short',
       day: 'numeric',
+      year: 'numeric',
     })
   }
 
   const go = () => {
+    if (!event._id) return
     navigate(`/events/${event._id}`)
     window.scrollTo(0, 0)
   }
@@ -70,46 +98,51 @@ const EventCard = ({ event }) => {
       <Box position="relative" h="160px" overflow="hidden">
         <Box
           as="img"
-          src={event.image}
-          alt={event.title}
+          src={event.image || '/placeholder.png'}
+          alt={event.title || 'Event'}
           w="100%"
           h="100%"
           objectFit="cover"
           transition="transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
           transform={isHovered ? 'scale(1.1)' : 'scale(1)'}
           draggable={false}
-          pointerEvents="none" /* image won't steal clicks */
+          pointerEvents="none"
         />
       </Box>
 
       <Box p={4} h="200px" display="flex" flexDir="column">
-        <Text fontSize="xs" color="gray.500" fontWeight="medium" mb={1.5}>
-          {event.category}
-        </Text>
+        {!!event.category && (
+          <Text fontSize="xs" color="gray.500" fontWeight="medium" mb={1.5}>
+            {event.category}
+          </Text>
+        )}
 
         <Text fontSize="md" fontWeight="semibold" mb={2.5} noOfLines={1}>
-          {event.title}
+          {event.title || 'Untitled Event'}
         </Text>
 
         <Flex align="center" gap={1} mb={1.5} color="gray.600" fontSize="xs">
           <Calendar size={14} />
-          <Text>{formatDate(event.date)}</Text>
+          <Text>{formatDate(startDate)}</Text>
         </Flex>
 
-        <Flex align="center" gap={1} mb={1.5} color="gray.600" fontSize="xs">
-          <MapPin size={14} />
-          <Text noOfLines={1}>{event.location}</Text>
-        </Flex>
+        {/* Hide completely if no location */}
+        {locationText && (
+          <Flex align="center" gap={1} mb={1.5} color="gray.600" fontSize="xs">
+            <MapPin size={14} />
+            <Text noOfLines={1}>{locationText}</Text>
+          </Flex>
+        )}
 
         <Flex align="center" gap={1} mb={3} color="gray.600" fontSize="xs">
           <Users size={14} />
-          <Text>{event.attendees} attending</Text>
+          <Text>{attendeesCount.toLocaleString()} attending</Text>
         </Flex>
 
         <Flex gap={1.5} flexWrap="wrap" mt="auto">
-          {event.tags.slice(0, 3).map((tag, index) => (
+          {(event.tags || []).slice(0, 3).map((tag, index) => (
             <Badge
-              key={index}
+              key={`${String(tag)}-${index}`}
               bg="pink.50"
               color="#EC4899"
               fontSize="10px"
@@ -117,9 +150,9 @@ const EventCard = ({ event }) => {
               py={0.5}
               borderRadius="md"
               fontWeight="medium"
-              pointerEvents="none" /* badges won't intercept clicks */
+              pointerEvents="none"
             >
-              {tag}
+              {String(tag)}
             </Badge>
           ))}
         </Flex>

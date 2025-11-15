@@ -3,11 +3,21 @@ import { Users } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 
-const GroupCard = ({ group }) => {
+const GroupCard = ({ group = {} }) => {
   const navigate = useNavigate()
   const [isHovered, setIsHovered] = useState(false)
 
+  // Members can be a number, an array, or provided via membersCount.
+  const membersCount = (() => {
+    if (typeof group.members === 'number') return group.members || 0
+    if (Array.isArray(group.members)) return group.members.length
+    if (typeof group.membersCount === 'number') return group.membersCount || 0
+    const n = Number(group.members) // handle stringified numbers
+    return Number.isFinite(n) ? n : 0
+  })()
+
   const go = () => {
+    if (!group._id) return
     navigate(`/groups/${group._id}`)
     window.scrollTo(0, 0)
   }
@@ -62,8 +72,8 @@ const GroupCard = ({ group }) => {
       <Box position="relative" h="160px" overflow="hidden">
         <Box
           as="img"
-          src={group.image}
-          alt={group.name}
+          src={group.image || '/placeholder.png'}
+          alt={group.name || 'Group'}
           w="100%"
           h="100%"
           objectFit="cover"
@@ -72,43 +82,46 @@ const GroupCard = ({ group }) => {
           draggable={false}
           pointerEvents="none"
         />
-        <Badge
-          position="absolute"
-          top={2.5}
-          left={2.5}
-          bg="white"
-          color="gray.700"
-          fontSize="10px"
-          px={2.5}
-          py={1}
-          borderRadius="full"
-          fontWeight="medium"
-          pointerEvents="none"
-        >
-          {group.category}
-        </Badge>
+        {!!group.category && (
+          <Badge
+            position="absolute"
+            top={2.5}
+            left={2.5}
+            bg="white"
+            color="gray.700"
+            fontSize="10px"
+            px={2.5}
+            py={1}
+            borderRadius="full"
+            fontWeight="medium"
+            pointerEvents="none"
+          >
+            {group.category}
+          </Badge>
+        )}
       </Box>
 
       {/* Body */}
       <Box p={4} h="200px" display="flex" flexDir="column">
-        <Text fontSize="xs" color="gray.500" fontWeight="medium" mb={1.5}>
-          {group.category}
-        </Text>
+        {!!group.category && (
+          <Text fontSize="xs" color="gray.500" fontWeight="medium" mb={1.5}>
+            {group.category}
+          </Text>
+        )}
 
         <Text fontSize="md" fontWeight="semibold" mb={2} noOfLines={1}>
-          {group.name}
+          {group.name || 'Group'}
         </Text>
 
         <Text fontSize="xs" color="gray.600" mb={3} noOfLines={2} lineHeight="1.5">
-          {group.description}
+          {group.description || 'No description provided.'}
         </Text>
 
         <Flex align="center" gap={1} mb={3} color="gray.600" fontSize="xs">
           <Users size={14} />
-          <Text>{group.members.toLocaleString()} members</Text>
+          <Text>{membersCount.toLocaleString()} members</Text>
         </Flex>
 
-        {/* (Optional) CTA text that doesn't steal clicks */}
         <Text
           mt="auto"
           fontSize="xs"

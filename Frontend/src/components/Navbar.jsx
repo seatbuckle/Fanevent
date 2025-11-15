@@ -22,6 +22,12 @@ import {
 } from '@clerk/clerk-react'
 import AdvancedSearchSheet from './AdvancedSearchModal'
 
+function useRole() {
+  const { user } = useUser()
+  // null when signed-out, otherwise "user" | "organizer" | "admin"
+  return user ? (user.publicMetadata?.role || 'user') : null
+}
+  
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
@@ -31,6 +37,7 @@ const Navbar = () => {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { user } = useUser()
+  const role = useRole();
   const { openSignIn } = useClerk()
 
   useEffect(() => {
@@ -231,16 +238,31 @@ const Navbar = () => {
             <UserButton
               appearance={{
                 ...clerkAppearance,
-                elements: { ...
-                  clerkAppearance.elements, rootBox: { alignSelf: 'center' } },
+                elements: { ...(clerkAppearance.elements || {}), rootBox: { alignSelf: 'center' } },
               }}
             >
               <UserButton.MenuItems>
-                <UserButton.Action
-                  label="My Dashboard"
-                  labelIcon={<LayoutDashboard size={15} />}
-                  onClick={() => navigate('/dashboard')}
-                />
+                {role === "admin" && (
+                  <UserButton.Action
+                    label="Admin Dashboard"
+                    labelIcon={<LayoutDashboard size={15} />}
+                    onClick={() => navigate('/admin')}
+                  />
+                )}
+                {role === "organizer" && (
+                  <UserButton.Action
+                    label="Organizer Dashboard"
+                    labelIcon={<LayoutDashboard size={15} />}
+                    onClick={() => navigate('/organizer')}
+                  />
+                )}
+                {(role === "user" || !role) && (
+                  <UserButton.Action
+                    label="My Dashboard"
+                    labelIcon={<LayoutDashboard size={15} />}
+                    onClick={() => navigate('/my-dashboard')}
+                  />
+                )}
                 <UserButton.Action
                   label="Messages"
                   labelIcon={<MessageSquare size={15} />}
@@ -249,6 +271,7 @@ const Navbar = () => {
               </UserButton.MenuItems>
             </UserButton>
           </SignedIn>
+
         </Flex>
 
         {/* 4) Mobile menu button */}
@@ -292,7 +315,7 @@ const Navbar = () => {
           bg="white"
           borderRadius="2xl"
           boxShadow="0 28px 80px rgba(0,0,0,0.25)"
-          overflow="hidden"              // keep rounded mask
+          overflow="hidden"
           transform={isOpen ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.97)'}
           transition="transform 260ms cubic-bezier(0.22,1,0.36,1)"
           onClick={(e) => e.stopPropagation()}
@@ -302,7 +325,7 @@ const Navbar = () => {
             bgGradient="linear(to-r, pink.400, fuchsia.500)"
             color="white"
             px={6}
-            pt="68px"                   // room for avatar INSIDE header
+            pt="68px"
             pb={4}
             position="relative"
             textAlign="center"
@@ -310,7 +333,7 @@ const Navbar = () => {
             {/* Avatar INSIDE header (no clipping) */}
             <Box
               position="absolute"
-              top="25px"                // visible inside; no overflow
+              top="25px"             
               left="50%"
               transform="translateX(-50%)"
               borderRadius="full"
@@ -358,7 +381,7 @@ const Navbar = () => {
                   justifyContent="flex-start"
                   h="56px"
                   borderRadius="lg"
-                  fontSize="xl"                    // larger for accessibility
+                  fontSize="xl"
                   color="gray.700"
                   transition="all 0.2s ease"
                   _hover={{ bg: 'pink.50', color: '#EC4899', transform: 'translateX(4px)' }}
@@ -415,16 +438,42 @@ const Navbar = () => {
 
             <SignedIn>
               <Flex direction="column" gap={3}>
-                <Button
-                  leftIcon={<LayoutDashboard size={18} />}
-                  variant="outline"
-                  fontSize="md"
-                  h="48px"
-                  onClick={() => { setIsOpen(false); navigate('/dashboard') }}
-                  _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
-                >
-                  Dashboard
-                </Button>
+                {role === "admin" && (
+                  <Button
+                    leftIcon={<LayoutDashboard size={18} />}
+                    variant="outline"
+                    fontSize="md"
+                    h="48px"
+                    onClick={() => { setIsOpen(false); navigate('/admin') }}
+                    _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
+                  >
+                    Admin Dashboard
+                  </Button>
+                )}
+                {role === "organizer" && (
+                  <Button
+                    leftIcon={<LayoutDashboard size={18} />}
+                    variant="outline"
+                    fontSize="md"
+                    h="48px"
+                    onClick={() => { setIsOpen(false); navigate('/organizer') }}
+                    _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
+                  >
+                    Organizer Dashboard
+                  </Button>
+                )}
+                {(role === "user" || !role) && (
+                  <Button
+                    leftIcon={<LayoutDashboard size={18} />}
+                    variant="outline"
+                    fontSize="md"
+                    h="48px"
+                    onClick={() => { setIsOpen(false); navigate('/my-dashboard') }}
+                    _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
+                  >
+                    My Dashboard
+                  </Button>
+                )}
                 <Button
                   leftIcon={<MessageSquare size={18} />}
                   variant="outline"
