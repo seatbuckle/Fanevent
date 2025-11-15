@@ -1,6 +1,6 @@
 // src/pages/GroupDetails.jsx
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import useGroupMemberships from '@/hooks/useGroupMemberships';
 import {
@@ -125,7 +125,7 @@ const GroupDetails = () => {
           setEvents(server);
           return;
         }
-      } catch {}
+      } catch { }
       // Fallback to dummy by group name
       if (mounted) {
         const key = normalizeEventGroupMatch(group);
@@ -210,7 +210,7 @@ const GroupDetails = () => {
           detail: { action, group: { _id: g._id, name: g.name, category: g.category } },
         })
       );
-    } catch {}
+    } catch { }
   };
 
   const handleJoinLeave = async () => {
@@ -230,15 +230,15 @@ const GroupDetails = () => {
     try {
       if (!joined) {
         optimisticUpdate(+1);
-        await api(`/api/groups/${group._id}/join`, { method: 'POST' });       
-        try { joinLocal(group._id); } catch {}
+        await api(`/api/groups/${group._id}/join`, { method: 'POST' });
+        try { joinLocal(group._id); } catch { }
         const fresh = await fetchServerGroup(group._id);
         if (fresh) broadcastGroupsChanged('join', fresh);
         toast.success('Joined group!');
       } else {
         optimisticUpdate(-1);
-        await api(`/api/groups/${group._id}/join`, { method: 'DELETE' });      
-        try { leaveLocal(group._id); } catch {}
+        await api(`/api/groups/${group._id}/join`, { method: 'DELETE' });
+        try { leaveLocal(group._id); } catch { }
         const fresh = await fetchServerGroup(group._id);
         if (fresh) broadcastGroupsChanged('leave', fresh);
         toast.success('Left group.');
@@ -342,9 +342,9 @@ const GroupDetails = () => {
                   <Flag size={18} />
                 </IconButton>
 
-                          {busy
-              ? (joined
-                  ? (
+                {busy
+                  ? (joined
+                    ? (
                       <Button
                         size="sm"
                         px={5}
@@ -358,7 +358,7 @@ const GroupDetails = () => {
                         Joining…
                       </Button>
                     )
-                  : (
+                    : (
                       <Button
                         size="sm"
                         px={5}
@@ -372,30 +372,30 @@ const GroupDetails = () => {
                         Leaving…
                       </Button>
                     )
-                )
-              : (
-                  <Button
-                    size="sm"
-                    px={5}
-                    onClick={handleJoinLeave}
-                    isDisabled={!canJoin || busy}
-                    _hover={{ bg: joined ? 'gray.200' : '#C7327C' }}
-                    transition="all 0.2s ease"
-                    {...(joined
-                      ? {
+                  )
+                  : (
+                    <Button
+                      size="sm"
+                      px={5}
+                      onClick={handleJoinLeave}
+                      isDisabled={!canJoin || busy}
+                      _hover={{ bg: joined ? 'gray.200' : '#C7327C' }}
+                      transition="all 0.2s ease"
+                      {...(joined
+                        ? {
                           bg: 'gray.100',
                           color: 'gray.700',
                           _hover: { bg: 'gray.200' },
                         }
-                      : {
+                        : {
                           bg: '#EC4899',
                           color: 'white',
                           _hover: { bg: '#C7327C' },
                         })}
-                  >
-                    {canJoin ? (joined ? 'Leave Group' : 'Join Group') : 'Pending'}
-                  </Button>
-                )}
+                    >
+                      {canJoin ? (joined ? 'Leave Group' : 'Join Group') : 'Pending'}
+                    </Button>
+                  )}
 
               </Flex>
             </Flex>
@@ -436,9 +436,25 @@ const GroupDetails = () => {
                   Pending approval
                 </Badge>
               )}
-              <Badge bg="pink.50" color="#EC4899" borderRadius="full" px={3} py={1} fontSize="xs">
-                {group.category}
-              </Badge>
+              <Link
+                key={String(group.category)}
+                to={`/groups?tags=${encodeURIComponent(group.category)}&type=groups`}
+                style={{ textDecoration: "none" }}
+              >
+                <Badge
+                  bg="pink.50"
+                  color="#EC4899"
+                  borderRadius="full"
+                  px={3}
+                  py={1}
+                  fontSize="xs"
+                  cursor="pointer"
+                  _hover={{ bg: "pink.100" }}
+                >
+                  {group.category}
+                </Badge>
+              </Link>
+
             </Flex>
           </Flex>
         </Box>
@@ -643,18 +659,36 @@ const AboutSection = ({ group }) => {
       </Box>
 
       <Flex mt={6} gap={2} align="center">
-        <Badge bg="pink.50" color="#EC4899" borderRadius="full" px={3} py={1} fontSize="xs">
-          {group.category}
-        </Badge>
+        <Link
+          key={`${String(group.category)}`}
+          to={`/groups?tags=${encodeURIComponent(group.category)}&type=groups`}
+          style={{ textDecoration: "none" }}
+        >
+          <Badge
+            bg="pink.50"
+            color="#EC4899"
+            borderRadius="full"
+            px={3}
+            py={1}
+            fontSize="xs"
+            cursor="pointer"
+            _hover={{ bg: "pink.100" }}
+          >
+            {group.category}
+          </Badge>
+        </Link>
+
         <Badge bg="gray.100" color="gray.700" borderRadius="full" px={3} py={1} fontSize="xs">
           {Number(count || 0).toLocaleString()} members
         </Badge>
-        {group.status && group.status !== 'approved' && (
+
+        {group.status && group.status !== "approved" && (
           <Badge bg="yellow.50" color="yellow.700" borderRadius="full" px={3} py={1} fontSize="xs">
             Pending approval
           </Badge>
         )}
       </Flex>
+
     </Box>
   );
 };

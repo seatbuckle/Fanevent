@@ -1,6 +1,6 @@
 // src/pages/EventDetails.jsx
 import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useUser } from "@clerk/clerk-react";
 import {
   Box,
@@ -64,8 +64,8 @@ const normalizeEvent = (raw = {}) => {
       typeof raw.attendeesCount === "number"
         ? raw.attendeesCount
         : typeof raw.rsvpCount === "number"
-        ? raw.rsvpCount
-        : 0,
+          ? raw.rsvpCount
+          : 0,
     status: raw.status || "approved",
     createdBy: raw.createdBy,
   };
@@ -469,6 +469,7 @@ export default function EventDetails() {
                         colorScheme="pink"
                         aria-label="Report"
                         onClick={handleReport}
+                        color="pink.500"
                       >
                         <Flag size={18} />
                       </IconButton>
@@ -598,11 +599,11 @@ export default function EventDetails() {
                         <Text fontWeight="medium" fontSize="sm">
                           {event.startAt
                             ? new Date(event.startAt).toLocaleDateString("en-US", {
-                                weekday: "long",
-                                month: "long",
-                                day: "numeric",
-                                year: "numeric",
-                              })
+                              weekday: "long",
+                              month: "long",
+                              day: "numeric",
+                              year: "numeric",
+                            })
                             : "TBD"}
                         </Text>
                         <Text fontSize="xs" color="gray.600">
@@ -710,18 +711,25 @@ export default function EventDetails() {
                   {!!event.tags?.length && (
                     <Flex gap={2} flexWrap="wrap">
                       {event.tags.map((tag, i) => (
-                        <Badge
+                        <Link
                           key={i}
-                          bg="pink.50"
-                          color="#EC4899"
-                          fontSize="sm"
-                          px={3}
-                          py={1}
-                          borderRadius="md"
-                          fontWeight="medium"
+                          to={`/events?tags=${encodeURIComponent(tag)}&type=events`}
+                          style={{ textDecoration: "none" }}
                         >
-                          {tag}
-                        </Badge>
+                          <Badge
+                            bg="pink.50"
+                            color="#EC4899"
+                            fontSize="sm"
+                            px={3}
+                            py={1}
+                            borderRadius="md"
+                            fontWeight="medium"
+                            cursor="pointer"
+                            _hover={{ bg: "pink.100" }}
+                          >
+                            {tag}
+                          </Badge>
+                        </Link>
                       ))}
                     </Flex>
                   )}
@@ -893,6 +901,7 @@ export default function EventDetails() {
                     variant="outline"
                     onClick={handleShare}
                     _hover={{ bg: "gray.50" }}
+                    color="pink.500"
                   >
                     <Share2 size={18} style={{ marginRight: 8 }} /> Share
                   </Button>
@@ -901,6 +910,7 @@ export default function EventDetails() {
                     variant="outline"
                     onClick={() => toast("Contact form coming soon")}
                     _hover={{ bg: "gray.50" }}
+                    color="pink.500"
                   >
                     <MessageSquare size={18} style={{ marginRight: 8 }} /> Contact
                   </Button>
@@ -1034,7 +1044,7 @@ export default function EventDetails() {
                 const isVideo = media.type === "video" || media.type === "youtube";
                 const thumb = isVideo
                   ? getVideoThumb(media.url) ||
-                    mediaGallery.find((m) => m.type === "image")?.url
+                  mediaGallery.find((m) => m.type === "image")?.url
                   : media.url;
                 return (
                   <Box

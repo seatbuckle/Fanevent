@@ -18,11 +18,13 @@ const Footer = () => {
         borderBottom="1px solid"
         borderColor="gray.500"
         pb={14}
+        color="pink.400"
       >
         <Box maxW={{ md: '384px' }}>
           <Image src={assets.logo} alt="logo" w="100px" h="auto" />
           <Text mt={6} fontSize="sm">
-            Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book.
+            Fanevent strives to connect fandoms together by providing a
+            platform to discover and create events for fans by fans.
           </Text>
           <HStack mt={4} gap={2}>
             <Image src={assets.googlePlay} alt="google play" h="36px" w="auto" />
@@ -35,29 +37,31 @@ const Footer = () => {
           align="start"
           justify={{ md: 'flex-end' }}
           gap={{ base: 20, md: 40 }}
+          color="pink.500"
         >
           <VStack align="start" spacing={5}>
-            <Text fontWeight="semibold">Company</Text>
+            <Text fontWeight="semibold" color="inherit">Company</Text>
             <VStack align="start" fontSize="sm" spacing={2}>
-              <Link href="#">Home</Link>
-              <Link href="#">About us</Link>
-              <Link href="#">Contact us</Link>
-              <Link href="#">Privacy policy</Link>
+              <Link href="#" color="pink.400">Home</Link>
+              <Link href="#" color="pink.400">About us</Link>
+              <Link href="#" color="pink.400">Contact us</Link>
+              <Link href="#" color="pink.400">Privacy policy</Link>
             </VStack>
           </VStack>
 
           <VStack align="start" spacing={5}>
-            <Text fontWeight="semibold">Get in touch</Text>
+            <Text fontWeight="semibold" color="inherit">Get in touch</Text>
             <VStack align="start" fontSize="sm" spacing={2}>
-              <Text>+1-234-567-890</Text>
-              <Text>contact@example.com</Text>
+              <Text color="pink.400">+1-234-567-890</Text>
+              <Text color="pink.400">contact@example.com</Text>
             </VStack>
           </VStack>
         </Flex>
+
       </Flex>
 
-      <Text pt={4} textAlign="center" fontSize="sm" pb={5}>
-        Copyright {new Date().getFullYear()} Â© GreatStack. All Right Reserved.
+      <Text pt={4} textAlign="center" fontSize="sm" color="pink.300" pb={5}>
+        Copyright {new Date().getFullYear()} Team 6 All Right Reserved.
       </Text>
     </Box>
   )
