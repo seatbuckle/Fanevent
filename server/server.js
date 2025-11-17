@@ -22,6 +22,7 @@ import socialRouter from "./Backend/routes/events.social.js";
 import groupsPublic from "./Backend/routes/groups.public.js";
 import groupsOrganizer from "./Backend/routes/groups.organizer.js";
 import groupsAdmin from "./Backend/routes/groups.admin.js";
+import messagesRouter from "./Backend/routes/messages.routes.js";
 
 
 // Clerk server SDK instance
@@ -155,6 +156,7 @@ app.use("/api/groups", groupsPublic);
 app.use("/api/organizer/groups", groupsOrganizer);
 app.use("/api/admin/groups", groupsAdmin);
 app.use("/api/organizer/events", eventsOrganizer);
+app.use('/api/messages', messagesRouter);
 
 // --- Global error handler: keep at the end ---
 app.use((err, req, res, next) => {
