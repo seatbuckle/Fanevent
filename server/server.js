@@ -96,11 +96,18 @@ app.post('/api/webhooks/clerk', async (req, res) => {
   }
 });
 
-
-app.post('/api/inngest-body-check', express.raw({ type: '*/*' }), (req, res) => {
-  res.json({ len: req.body?.length ?? null, isBuffer: Buffer.isBuffer(req.body) });
-});
-
+app.all(
+  '/api/inngest-body-check',
+  express.raw({ type: '*/*' }),
+  (req, res) => {
+    console.log('[/api/inngest-body-check] hit:', req.method);
+    res.json({
+      method: req.method,
+      len: Buffer.isBuffer(req.body) ? req.body.length : null,
+      isBuffer: Buffer.isBuffer(req.body),
+    });
+  }
+);
 
 // -----------------------------
 // Clerk middleware
@@ -109,6 +116,7 @@ app.post('/api/inngest-body-check', express.raw({ type: '*/*' }), (req, res) => 
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/inngest')) return next();
   if (req.path.startsWith('/api/webhooks/clerk')) return next();
+   if (req.path.startsWith('/api/inngest-body-check')) return next(); // <-- add this
   return clerkMiddleware()(req, res, next);
 });
 
