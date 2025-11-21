@@ -31,18 +31,6 @@ import { inngestRouter } from './Backend/routes/inngest.route.js';
 
 const app = express();
 
-
-// Place this BEFORE your global wrapper and before you mount other routers
-app.get('/api/_whoami', clerkMiddleware(), requireAuth(), (req, res) => {
-  const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
-  return res.json({
-    ok: true,
-    userId: auth?.userId ?? null,
-    sessionId: auth?.sessionId ?? null,
-    orgId: auth?.orgId ?? null,
-  });
-});
-
 // 1) DB FIRST
 await connectDB();
 
@@ -56,6 +44,26 @@ app.use('/api/inngest', inngestRouter);
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+
+// whoami — explicit, no redirects, JSON only
+app.get('/api/_whoami', clerkMiddleware(), (req, res) => {
+  const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
+  if (!auth?.userId) {
+    return res.status(401).json({
+      ok: false,
+      userId: null,
+      sessionId: null,
+      reason: 'No session on request',
+    });
+  }
+  return res.json({
+    ok: true,
+    userId: auth.userId,
+    sessionId: auth.sessionId ?? null,
+    orgId: auth.orgId ?? null,
+  });
+});
 
 // 4) Clerk webhook → forwards to Inngest
 app.post('/api/webhooks/clerk', async (req, res) => {
@@ -76,7 +84,9 @@ app.post('/api/webhooks/clerk', async (req, res) => {
 // 5) Clerk middleware (skip only the webhook/inngest paths)
 app.use((req, res, next) => {
   const p = req.path;
-  if (p.startsWith('/api/inngest') || p.startsWith('/api/webhooks/clerk')) return next();
+  if (p.startsWith('/api/inngest')) return next();
+  if (p.startsWith('/api/webhooks/clerk')) return next();
+  if (p === '/api/_whoami') return next(); // already has route-level Clerk
   return clerkMiddleware()(req, res, next);
 });
 
@@ -157,6 +167,11 @@ app.use((err, req, res, next) => {
 });
 
 app.get('/', (_req, res) => res.send('Server is Live!'));
+
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next(); // don't swallow API
+  res.send('Server is Live!');
+});
 
 export default app;
 
