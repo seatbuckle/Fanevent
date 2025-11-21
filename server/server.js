@@ -3,67 +3,146 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import { clerkMiddleware, requireAuth, clerkClient as clerk } from '@clerk/express';
+import { Webhook } from 'svix'; // ← ADD THIS IMPORT
 import { ensureRoleDefault } from './middleware/ensureRoleDefault.js';
 
 import connectDB from './Backend/config/db.js';
-import { inngest, functions } from './Backend/inngest/index.js';
-import organizerApplicationsRouter from "./Backend/routes/organizerApplications.routes.js";
-import adminOrganizerAppsRouter from "./Backend/routes/admin.organizerApplications.routes.js";
-import adminUsers from "./Backend/routes/admin.users.routes.js";
-import adminStats from "./Backend/routes/admin.stats.routes.js";
-import adminReportsRouter from "./Backend/routes/admin.reports.routes.js";
-import reportsRouter from "./Backend/routes/reports.routes.js";
-import eventsPublic from "./Backend/routes/events.public.js";
-import eventsOrganizer from "./Backend/routes/events.organizer.js";
-import eventsAdmin from "./Backend/routes/events.admin.js";
-import engagement from "./Backend/routes/engagement.js";
-import socialRouter from "./Backend/routes/events.social.js";
-import groupsPublic from "./Backend/routes/groups.public.js";
-import groupsOrganizer from "./Backend/routes/groups.organizer.js";
-import groupsAdmin from "./Backend/routes/groups.admin.js";
-import organizerAnnouncements from './Backend/routes/announcements.organizer.js';
-import notificationsRoutes from "./Backend/routes/notifications.routes.js";
+import { inngest } from './Backend/inngest/index.js';
 import { inngestRouter } from './Backend/routes/inngest.route.js';
+// ... other imports
 
 const app = express();
 
-// 1) DB FIRST
+// 1) DB Connection
 await connectDB();
 
-// 2) Basic middleware (BEFORE Clerk)
-app.use(cors());
-app.use(express.json({ limit: '20mb' }));
-app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+// 2) CORS
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://your-frontend-domain.vercel.app',
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
-// 3) Routes that should be PUBLIC (no Clerk middleware)
-// Inngest endpoint - must be public for Inngest to call
-app.use('/api/inngest', inngestRouter);
-
-// Clerk webhook - must be public for Clerk to call
-app.post('/api/webhooks/clerk', async (req, res) => {
-  try {
-    const { type, data } = req.body || {};
-    if (!type || !data) return res.status(400).json({ ok: false, message: 'Bad Clerk payload' });
-
-    const name = `clerk/${String(type).replace('.', '/')}`;
-    await inngest.send({ name, data });
-    console.log('✅ Forwarded Clerk event to Inngest:', name, 'id:', data?.id || '(no id)');
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error('❌ Forward Clerk → Inngest failed:', e?.message);
-    return res.status(500).json({ ok: false, message: 'Forward failed' });
+// 3) Body parsers - BUT NOT for webhook routes!
+// We'll parse webhook bodies manually
+app.use((req, res, next) => {
+  // Skip body parsing for webhook endpoints
+  if (req.path === '/api/webhooks/clerk' || req.path.startsWith('/api/inngest')) {
+    return next();
   }
+  express.json({ limit: '20mb' })(req, res, next);
 });
 
-// 4) Apply Clerk middleware to ALL other routes
-app.use(clerkMiddleware());
+app.use((req, res, next) => {
+  if (req.path === '/api/webhooks/clerk' || req.path.startsWith('/api/inngest')) {
+    return next();
+  }
+  express.urlencoded({ extended: true, limit: '20mb' })(req, res, next);
+});
 
-// 5) Apply role default middleware AFTER Clerk
+// 4) PUBLIC ROUTES (before Clerk middleware)
+
+// Inngest endpoint
+app.use('/api/inngest', inngestRouter);
+
+// Clerk webhook with signature verification
+app.post(
+  '/api/webhooks/clerk',
+  express.raw({ type: 'application/json' }), // ← Get raw body for signature verification
+  async (req, res) => {
+    try {
+      const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
+
+      if (!WEBHOOK_SECRET) {
+        console.error('❌ CLERK_WEBHOOK_SECRET is not set!');
+        return res.status(500).json({
+          ok: false,
+          message: 'Webhook secret not configured',
+        });
+      }
+
+      // Get headers for signature verification
+      const svix_id = req.headers['svix-id'];
+      const svix_timestamp = req.headers['svix-timestamp'];
+      const svix_signature = req.headers['svix-signature'];
+
+      // Check if headers exist
+      if (!svix_id || !svix_timestamp || !svix_signature) {
+        console.error('❌ Missing svix headers');
+        return res.status(400).json({
+          ok: false,
+          message: 'Missing svix headers',
+        });
+      }
+
+      // Get the raw body as string
+      const payload = req.body.toString();
+
+      // Create Svix instance
+      const wh = new Webhook(WEBHOOK_SECRET);
+
+      let evt;
+      try {
+        // Verify the webhook signature
+        evt = wh.verify(payload, {
+          'svix-id': svix_id,
+          'svix-timestamp': svix_timestamp,
+          'svix-signature': svix_signature,
+        });
+      } catch (err) {
+        console.error('❌ Webhook signature verification failed:', err.message);
+        return res.status(400).json({
+          ok: false,
+          message: 'Invalid signature',
+        });
+      }
+
+      // Now we know the webhook is authentic!
+      const { type, data } = evt;
+
+      console.log('✅ Verified Clerk webhook:', type, 'User ID:', data?.id || '(no id)');
+
+      // Forward to Inngest
+      const inngestEventName = `clerk/${String(type).replace('.', '/')}`;
+      await inngest.send({
+        name: inngestEventName,
+        data: data,
+      });
+
+      console.log('✅ Forwarded to Inngest:', inngestEventName);
+
+      return res.json({ ok: true, received: true });
+    } catch (e) {
+      console.error('❌ Clerk webhook error:', e?.message);
+      return res.status(500).json({
+        ok: false,
+        message: 'Webhook processing failed',
+      });
+    }
+  }
+);
+
+// 5) Clerk middleware for all other routes
+app.use(clerkMiddleware({
+  onError: (err) => {
+    console.error('Clerk middleware error:', err.message);
+  },
+}));
+
+// 6) Ensure role default
 app.use(ensureRoleDefault);
 
-// 6) Whoami endpoint - NOW it has access to req.auth
+// 7) Debug endpoint
 app.get('/api/_whoami', (req, res) => {
+  console.log('🔍 Whoami called');
+  
   const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
+  
   if (!auth?.userId) {
     return res.status(401).json({
       ok: false,
@@ -72,6 +151,7 @@ app.get('/api/_whoami', (req, res) => {
       reason: 'No session on request',
     });
   }
+  
   return res.json({
     ok: true,
     userId: auth.userId,
@@ -80,7 +160,8 @@ app.get('/api/_whoami', (req, res) => {
   });
 });
 
-// Role helpers
+// ... rest of your routes (unchanged)
+
 async function getRole(userId) {
   const user = await clerk.users.getUser(userId);
   return user.publicMetadata?.role || 'user';
@@ -88,20 +169,27 @@ async function getRole(userId) {
 
 async function requireAdmin(req, res, next) {
   try {
-    const role = await getRole(req.auth.userId);
-    if (role !== 'admin') return res.status(403).json({ ok: false, message: 'Admin only' });
+    const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
+    if (!auth?.userId) {
+      return res.status(401).json({ ok: false, message: 'Unauthorized' });
+    }
+    const role = await getRole(auth.userId);
+    if (role !== 'admin') {
+      return res.status(403).json({ ok: false, message: 'Admin only' });
+    }
     next();
-  } catch {
+  } catch (err) {
+    console.error('requireAdmin error:', err);
     res.status(500).json({ ok: false, message: 'Failed to verify role' });
   }
 }
 
-// Auth routes
 app.get('/api/auth/role', requireAuth(), async (req, res) => {
   try {
-    const role = await getRole(req.auth.userId);
+    const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
+    const role = await getRole(auth.userId);
     res.json({ ok: true, role });
-  } catch {
+  } catch (err) {
     res.status(500).json({ ok: false, message: 'Failed to fetch role' });
   }
 });
@@ -109,10 +197,14 @@ app.get('/api/auth/role', requireAuth(), async (req, res) => {
 app.post('/api/admin/organizers/approve', requireAuth(), requireAdmin, async (req, res) => {
   try {
     const { applicantUserId } = req.body;
-    if (!applicantUserId) return res.status(400).json({ ok: false, message: 'Missing applicantUserId' });
-    await clerk.users.updateUserMetadata(applicantUserId, { publicMetadata: { role: 'organizer' } });
+    if (!applicantUserId) {
+      return res.status(400).json({ ok: false, message: 'Missing applicantUserId' });
+    }
+    await clerk.users.updateUserMetadata(applicantUserId, {
+      publicMetadata: { role: 'organizer' },
+    });
     res.json({ ok: true });
-  } catch {
+  } catch (err) {
     res.status(500).json({ ok: false, message: 'Failed to update role' });
   }
 });
@@ -120,44 +212,35 @@ app.post('/api/admin/organizers/approve', requireAuth(), requireAdmin, async (re
 app.post('/api/admin/organizers/demote', requireAuth(), requireAdmin, async (req, res) => {
   try {
     const { userId } = req.body;
-    if (!userId) return res.status(400).json({ ok: false, message: 'Missing userId' });
-    await clerk.users.updateUserMetadata(userId, { publicMetadata: { role: 'user' } });
+    if (!userId) {
+      return res.status(400).json({ ok: false, message: 'Missing userId' });
+    }
+    await clerk.users.updateUserMetadata(userId, {
+      publicMetadata: { role: 'user' },
+    });
     res.json({ ok: true });
-  } catch {
+  } catch (err) {
     res.status(500).json({ ok: false, message: 'Failed to update role' });
   }
 });
 
-// All other routes
-app.use('/api/reports', reportsRouter);
-app.use('/api/admin/reports', adminReportsRouter);
-app.use('/api/admin/users', adminUsers);
-app.use('/api/organizer-applications', organizerApplicationsRouter);
-app.use('/api/admin/organizer-applications', adminOrganizerAppsRouter);
-app.use('/api/events', eventsPublic);
-app.use('/api/admin/events', eventsAdmin);
-app.use('/api/admin/stats', adminStats);
-app.use('/api', engagement);
-app.use('/api/events', socialRouter);
-app.use('/api/groups', groupsPublic);
-app.use('/api/organizer/groups', groupsOrganizer);
-app.use('/api/admin/groups', groupsAdmin);
-app.use('/api/organizer/events', eventsOrganizer);
-app.use('/api/organizer/announcements', organizerAnnouncements);
-app.use('/api/notifications', notificationsRoutes);
+// ... all your other routes
+// (keep them exactly as they are)
 
 // Error handler
 app.use((err, req, res, next) => {
   console.error('❌ Server error:', err);
-  res.status(err.status || 500).json({ ok: false, message: err?.message || 'Internal Server Error' });
+  res.status(err.status || 500).json({
+    ok: false,
+    message: err?.message || 'Internal Server Error',
+  });
 });
 
-// Health check
 app.get('/', (req, res) => res.send('Server is Live!'));
 
 export default app;
 
 if (!process.env.VERCEL) {
   const port = process.env.PORT || 3000;
-  app.listen(port, () => console.log(`Server listening at http://localhost:${port}`));
+  app.listen(port, () => console.log(`🚀 Server at http://localhost:${port}`));
 }

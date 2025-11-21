@@ -22,6 +22,7 @@
     "express": "^5.1.0",
     "inngest": "^3.45.1",
     "mongoose": "^8.19.3",
+    "svix": "^1.81.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
