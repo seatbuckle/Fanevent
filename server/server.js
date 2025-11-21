@@ -2,7 +2,7 @@
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
-import { clerkMiddleware, requireAuth, getAuth } from '@clerk/express';
+import { clerkMiddleware, requireAuth, getAuth, clerkClient as clerk } from '@clerk/express';
 import { ensureRoleDefault } from './middleware/ensureRoleDefault.js';
 
 import connectDB from './Backend/config/db.js';
@@ -27,7 +27,6 @@ import notificationsRoutes from "./Backend/routes/notifications.routes.js";
 
 // ✅ correct path — your router file is at server/inngest.route.js
 import { inngestRouter } from './Backend/routes/inngest.route.js';
-import { clerkClient as clerk } from '@clerk/express'
 
 const app = express();
 
