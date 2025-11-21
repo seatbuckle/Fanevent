@@ -2,7 +2,7 @@
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
-import { clerkMiddleware, requireAuth } from '@clerk/express';
+import { clerkMiddleware, requireAuth, getAuth } from '@clerk/express';
 import { ensureRoleDefault } from './middleware/ensureRoleDefault.js';
 
 import connectDB from './Backend/config/db.js';
@@ -69,21 +69,13 @@ app.use((req, res, next) => {
 app.use(ensureRoleDefault);
 
 
-
-// Put this BEFORE any global auth wrapper or routers:
+// must be registered early:
 app.get('/api/_whoami', (req, res) => {
-  try {
-    const { userId, sessionId } = getAuth(req) || {}
-    if (!userId) {
-      // No redirect — just JSON
-      return res.status(401).json({ ok: false, userId: null, sessionId: null })
-    }
-    return res.json({ ok: true, userId, sessionId })
-  } catch (e) {
-    console.error('whoami error:', e?.message)
-    return res.status(500).json({ ok: false, message: 'whoami failed' })
-  }
-})
+  const { userId, sessionId } = getAuth(req) || {};
+  if (!userId) return res.status(401).json({ ok: false, userId: null, sessionId: null });
+  return res.json({ ok: true, userId, sessionId });
+});
+
 
 // Role helpers & routes (unchanged) …
 async function getRole(userId) {
