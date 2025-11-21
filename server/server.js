@@ -25,19 +25,6 @@ import groupsAdmin from "./Backend/routes/groups.admin.js";
 import organizerAnnouncements from './Backend/routes/announcements.organizer.js';
 import notificationsRoutes from "./Backend/routes/notifications.routes.js";
 
-
-// Place this BEFORE your global wrapper and before you mount other routers
-app.get('/api/_whoami', clerkMiddleware(), requireAuth(), (req, res) => {
-  const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
-  return res.json({
-    ok: true,
-    userId: auth?.userId ?? null,
-    sessionId: auth?.sessionId ?? null,
-    orgId: auth?.orgId ?? null,
-  });
-});
-
-
 // ✅ correct path — your router file is at server/inngest.route.js
 import { inngestRouter } from './Backend/routes/inngest.route.js';
 
@@ -45,7 +32,6 @@ const app = express();
 
 // 1) DB FIRST
 await connectDB();
-
 
 // 2) Inngest FIRST, isolated chain (v3). Do NOT pass signingKey/eventKey here.
 app.use('/api/inngest', inngestRouter);
@@ -80,6 +66,18 @@ app.use((req, res, next) => {
 
 // Ensure default role exists for newly seen users
 app.use(ensureRoleDefault);
+
+
+// Place this BEFORE your global wrapper and before you mount other routers
+app.get('/api/_whoami', clerkMiddleware(), requireAuth(), (req, res) => {
+  const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
+  return res.json({
+    ok: true,
+    userId: auth?.userId ?? null,
+    sessionId: auth?.sessionId ?? null,
+    orgId: auth?.orgId ?? null,
+  });
+});
 
 
 // Role helpers & routes (unchanged) …
