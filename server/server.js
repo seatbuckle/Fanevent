@@ -84,9 +84,7 @@ app.post('/api/webhooks/clerk', async (req, res) => {
 // 5) Clerk middleware (skip only the webhook/inngest paths)
 app.use((req, res, next) => {
   const p = req.path;
-  if (p.startsWith('/api/inngest')) return next();
-  if (p.startsWith('/api/webhooks/clerk')) return next();
-  if (p === '/api/_whoami') return next(); // already has route-level Clerk
+  if (p.startsWith('/api/inngest') || p.startsWith('/api/webhooks/clerk') || (p === '/api/_whoami') ) return next();
   return clerkMiddleware()(req, res, next);
 });
 
