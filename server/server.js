@@ -42,12 +42,10 @@ app.use(
   '/api/inngest',
   express.raw({ type: '*/*' }),
   serve({
-    client: inngest,
-    functions,
-    // make verification explicit
-    signingKey: process.env.INNGEST_SIGNING_KEY,
-    // not used for verify, but good to wire for sends:
-    eventKey: process.env.INNGEST_EVENT_KEY,
+    client: inngest,                   // <-- v3 requires options object
+    functions,                         // your exported functions array
+    signingKey: process.env.INNGEST_SIGNING_KEY, // explicit is safest
+    eventKey: process.env.INNGEST_EVENT_KEY,     // optional, for inngest.send()
   })
 );
 
