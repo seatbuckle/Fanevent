@@ -19,6 +19,9 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminApplications from "./pages/admin/AdminApplications";
 import RequireRole from "./components/auth/RequireRole";
 import { useRoleStore } from "./store/useRoleStore";
+import NotificationCenter from "@/pages/NotificationCenter";
+
+
 
 /** Layout shared by user, organizer, and admin routes */
 function SiteLayout({ children }) {
@@ -43,6 +46,7 @@ function UserRoutes() {
         <Route path="/groups/:id" element={<GroupDetails />} />
         <Route path="/groups" element={<Groups />} />
         <Route path="/my-dashboard" element={<MyDashboard />} />
+        <Route path="/notifications" element={<NotificationCenter />} />
 
         {/* Block privileged areas */}
         <Route path="/organizer" element={<Navigate to="/" replace />} />

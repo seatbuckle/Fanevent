@@ -1,8 +1,9 @@
 // src/pages/GroupDetails.jsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import useGroupMemberships from '@/hooks/useGroupMemberships';
+import ReportModal from '@/components/ui/ReportModal';
 import {
   Box,
   Flex,
@@ -38,9 +39,7 @@ const getMembersCount = (g) => {
 
 const hasUserJoined = (g, clerkUserId) => {
   if (!g || !clerkUserId) return false;
-  if (g.isMember === true) return true; // backend convenience flag
-  // Some backends store Clerk id directly; others store internal user _id.
-  // Try several common shapes:
+  if (g.isMember === true) return true;
   const ids =
     (Array.isArray(g.memberIds) && g.memberIds) ||
     (Array.isArray(g.members) &&
@@ -61,7 +60,9 @@ const GroupDetails = () => {
   const { user } = useUser();
   const clerkId = user?.id || null;
 
-  // fallback local membership hook (kept for resilience)
+  // Report modal state (group-level)
+  const [isGroupReportOpen, setGroupReportOpen] = useState(false);
+
   const { isMember: isMemberLocal, join: joinLocal, leave: leaveLocal } =
     useGroupMemberships(clerkId);
 
@@ -84,7 +85,6 @@ const GroupDetails = () => {
         if (g && g._id) {
           setGroup(g);
         } else {
-          // Fallback to dummy, keep UX flowing
           const d = dummyGroupsData.find((x) => x._id === id);
           setGroup(d || null);
           if (!d) navigate('/groups');
@@ -104,17 +104,15 @@ const GroupDetails = () => {
     };
   }, [id, navigate]);
 
-  // ----- Load events for this group (server first, fallback to dummy) -----
+  // ----- Load events for this group -----
   useEffect(() => {
     let mounted = true;
 
     const loadEvents = async () => {
       if (!group) return;
       try {
-        // Prefer canonical route if you implement it
         const server =
           (await api(`/api/groups/${group._id}/events`).catch(() => null)) ||
-          // Secondary fallback: search by name/category if your API supports it
           (await api(
             `/api/events?groupId=${encodeURIComponent(
               group._id
@@ -125,8 +123,7 @@ const GroupDetails = () => {
           setEvents(server);
           return;
         }
-      } catch { }
-      // Fallback to dummy by group name
+      } catch {}
       if (mounted) {
         const key = normalizeEventGroupMatch(group);
         const d = dummyEventsData
@@ -137,7 +134,6 @@ const GroupDetails = () => {
     };
 
     loadEvents();
-    // only re-run when group changes
   }, [group]);
 
   if (loading) return null;
@@ -145,16 +141,19 @@ const GroupDetails = () => {
 
   const joined = typeof group?.isMember === 'boolean' ? group.isMember : hasUserJoined(group, clerkId);
   const membersCount = getMembersCount(group);
-
-  const handleReport = () =>
-    toast('Report submitted – thank you!', { icon: '⚠️' });
-
   const canJoin = group.status ? group.status === 'approved' : true;
+
+  const handleReport = () => {
+    if (!clerkId) {
+      toast.error('Please sign in to report content');
+      return;
+    }
+    setGroupReportOpen(true);
+  };
 
   const optimisticUpdate = (delta) =>
     setGroup((g) => {
       if (!g) return g;
-      // Try to mutate members array if present; otherwise adjust a synthetic count
       if (Array.isArray(g.members)) {
         const exists = hasUserJoined(g, clerkId);
         if (delta > 0 && !exists) {
@@ -185,7 +184,6 @@ const GroupDetails = () => {
         }
         return g;
       }
-      // No array—just nudge the count
       return {
         ...g,
         membersCount: Math.max(0, getMembersCount(g) + delta),
@@ -193,7 +191,6 @@ const GroupDetails = () => {
       };
     });
 
-  // ---- NEW: fetch server truth after mutation ----
   const fetchServerGroup = async (gid) => {
     const fresh = await api(`/api/groups/${gid}`).catch(() => null);
     if (fresh && fresh._id) {
@@ -202,7 +199,6 @@ const GroupDetails = () => {
     return fresh;
   };
 
-  // ---- NEW: broadcast join/leave so MyDashboard can refresh ----
   const broadcastGroupsChanged = (action, g) => {
     try {
       window.dispatchEvent(
@@ -210,7 +206,7 @@ const GroupDetails = () => {
           detail: { action, group: { _id: g._id, name: g.name, category: g.category } },
         })
       );
-    } catch { }
+    } catch {}
   };
 
   const handleJoinLeave = async () => {
@@ -226,25 +222,23 @@ const GroupDetails = () => {
     if (busy) return;
     setBusy(true);
 
-    // Prefer server endpoints; if they fail, fall back to local hook so UX still works.
     try {
       if (!joined) {
         optimisticUpdate(+1);
         await api(`/api/groups/${group._id}/join`, { method: 'POST' });
-        try { joinLocal(group._id); } catch { }
+        try { joinLocal(group._id); } catch {}
         const fresh = await fetchServerGroup(group._id);
         if (fresh) broadcastGroupsChanged('join', fresh);
         toast.success('Joined group!');
       } else {
         optimisticUpdate(-1);
         await api(`/api/groups/${group._id}/join`, { method: 'DELETE' });
-        try { leaveLocal(group._id); } catch { }
+        try { leaveLocal(group._id); } catch {}
         const fresh = await fetchServerGroup(group._id);
         if (fresh) broadcastGroupsChanged('leave', fresh);
         toast.success('Left group.');
       }
     } catch (e) {
-      // revert optimistic and fall back
       optimisticUpdate(joined ? +1 : -1);
       try {
         if (!joined) {
@@ -273,7 +267,6 @@ const GroupDetails = () => {
   return (
     <Box pt="88px" pb={16} bg="gray.50" minH="100vh">
       <Box px={{ base: 6, md: 12, lg: 20, xl: 32 }}>
-        {/* Back */}
         <Button
           variant="ghost"
           size="sm"
@@ -286,7 +279,6 @@ const GroupDetails = () => {
           Back
         </Button>
 
-        {/* Hero */}
         <Box
           bg="white"
           borderRadius="2xl"
@@ -304,14 +296,17 @@ const GroupDetails = () => {
               objectFit="cover"
               transform="scale(1.02)"
             />
+            {/* Make overlay non-intercepting so clicks reach buttons */}
             <Box
               position="absolute"
               inset={0}
               bg="linear-gradient(180deg, rgba(0,0,0,0.35) 10%, rgba(0,0,0,0.15) 50%, rgba(0,0,0,0.45) 100%)"
+              pointerEvents="none"
             />
             <Flex
               position="absolute"
               inset={0}
+              zIndex={2}
               px={{ base: 6, md: 8 }}
               py={{ base: 5, md: 6 }}
               align="end"
@@ -331,7 +326,7 @@ const GroupDetails = () => {
                 </Flex>
               </Box>
 
-              <Flex align="center" gap={2}>
+              <Flex align="center" gap={2} zIndex={3}>
                 <IconButton
                   aria-label="Report group"
                   variant="ghost"
@@ -396,12 +391,10 @@ const GroupDetails = () => {
                       {canJoin ? (joined ? 'Leave Group' : 'Join Group') : 'Pending'}
                     </Button>
                   )}
-
               </Flex>
             </Flex>
           </Box>
 
-          {/* Tabs */}
           <Flex
             px={{ base: 4, md: 6, lg: 8 }}
             py={3}
@@ -454,12 +447,10 @@ const GroupDetails = () => {
                   {group.category}
                 </Badge>
               </Link>
-
             </Flex>
           </Flex>
         </Box>
 
-        {/* Content */}
         {activeTab === 'events' && (
           <EventsSection
             groupEvents={events}
@@ -474,6 +465,15 @@ const GroupDetails = () => {
 
         {activeTab === 'about' && <AboutSection group={group} />}
       </Box>
+
+      {/* Group Report Modal — always mounted, controlled by boolean */}
+      <ReportModal
+        isOpen={isGroupReportOpen}
+        onClose={() => setGroupReportOpen(false)}
+        reportType="Group"
+        targetId={group._id}
+        targetName={group.name}
+      />
     </Box>
   );
 };
@@ -481,8 +481,20 @@ const GroupDetails = () => {
 /* ----------------- Sections ----------------- */
 
 const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
+  const [reportingEvent, setReportingEvent] = useState(null);
+  const { user } = useUser();
+
   const truncate = (text = '', maxLen = 80) =>
     text ? (text.length > maxLen ? text.slice(0, maxLen - 3).trim() + '...' : text) : '';
+
+  const handleEventReport = (e, event) => {
+    e.stopPropagation();
+    if (!user?.id) {
+      toast.error('Please sign in to report content');
+      return;
+    }
+    setReportingEvent(event); // this opens the modal
+  };
 
   return (
     <Box>
@@ -516,7 +528,6 @@ const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
             _focusVisible={{ outline: '2px solid #EC4899', outlineOffset: '2px' }}
           >
             <Grid templateColumns={{ base: '1fr', md: '360px 1fr' }} alignItems="stretch">
-              {/* Thumbnail */}
               <Box position="relative" h={{ base: '100px', md: '250px' }} overflow="hidden">
                 <Box
                   as="img"
@@ -530,7 +541,6 @@ const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
                 />
               </Box>
 
-              {/* Body */}
               <Box p={{ base: 4, md: 5 }} display="flex" flexDir="column">
                 <Flex justify="space-between" align="start" mb={2}>
                   <Text fontWeight="semibold" color="gray.800" fontSize="lg" noOfLines={1}>
@@ -541,10 +551,7 @@ const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
                     variant="ghost"
                     size="sm"
                     color="gray.500"
-                    onClick={(ev) => {
-                      ev.stopPropagation();
-                      toast('Report submitted – thank you!', { icon: '⚠️' });
-                    }}
+                    onClick={(ev) => handleEventReport(ev, e)}
                     _hover={{ bg: 'gray.100' }}
                   >
                     <Flag size={16} />
@@ -588,6 +595,15 @@ const EventsSection = ({ groupEvents, formatLongDate, navigate }) => {
           </Box>
         ))}
       </Flex>
+
+      {/* Event Report Modal — controlled by reportingEvent presence */}
+      <ReportModal
+        isOpen={!!reportingEvent}
+        onClose={() => setReportingEvent(null)}
+        reportType="Event"
+        targetId={reportingEvent?._id}
+        targetName={reportingEvent?.title}
+      />
     </Box>
   );
 };
@@ -643,7 +659,7 @@ const AboutSection = ({ group }) => {
           <Text as="span" fontWeight="semibold">
             {String(group.category || '').toLowerCase()}
           </Text>
-          . Whether you’re brand new or a seasoned enthusiast, you’ll find a friendly community and plenty of ways to get involved.
+          . Whether you're brand new or a seasoned enthusiast, you'll find a friendly community and plenty of ways to get involved.
         </Text>
       </Box>
 
@@ -688,7 +704,6 @@ const AboutSection = ({ group }) => {
           </Badge>
         )}
       </Flex>
-
     </Box>
   );
 };

@@ -72,6 +72,9 @@ const [groupSuggestions, setGroupSuggestions] = React.useState([]);
 const [showGroupSuggest, setShowGroupSuggest] = React.useState(false);
 const groupAbortRef = React.useRef(null);
 const groupDebounceRef = React.useRef(null);
+// Announcements
+const [announcements, setAnnouncements] = React.useState([]);
+const [loadingAnnouncements, setLoadingAnnouncements] = React.useState(false);
 
 const updateMediaAt = (idx, key, value) => {
   setAdditionalMedia((arr) => arr.map((m, i) => (i === idx ? { ...m, [key]: value } : m)));
@@ -1147,6 +1150,10 @@ export default function OrganizerDashboard() {
   const { isLoaded } = useUser();
   const [activeTab, setActiveTab] = React.useState("my-events");
   const navigate = useNavigate();
+    // NEW: announcements state
+  const [announcements, setAnnouncements] = React.useState([]);
+  const [loadingAnnouncements, setLoadingAnnouncements] = React.useState(false);
+
 
   // events & attendees
   const [events, setEvents] = React.useState([]);
@@ -1199,9 +1206,29 @@ export default function OrganizerDashboard() {
     }
   }, [selectedEventId]);
 
+const loadAnnouncements = React.useCallback(async () => {
+  setLoadingAnnouncements(true);
+  try {
+  // Matches the backend route we added: GET /api/organizer/announcements/mine
+  const res = await api("/api/organizer/announcements/mine");
+  const items = res?.items || [];
+  setAnnouncements(items);
+  } catch (e) {
+    toast.error(e?.message || "Failed to load announcements");
+  } finally {
+    setLoadingAnnouncements(false);
+  }
+}, []);
+
   React.useEffect(() => {
     loadAttendees();
   }, [loadAttendees]);
+
+  React.useEffect(() => {
+    if (activeTab === "announcements") {
+    loadAnnouncements();
+    }
+  }, [activeTab, loadAnnouncements]);
 
   const openEditModal = (ev) => {
     setEditingEvent(ev);
@@ -1211,6 +1238,7 @@ export default function OrganizerDashboard() {
     setEventModalOpen(false);
     setEditingEvent(null);
   };
+  
 
   const deleteEvent = async (id) => {
     if (!id) return;
@@ -1556,17 +1584,52 @@ export default function OrganizerDashboard() {
         {activeTab === "announcements" && (
           <Card>
             <Flex justify="space-between" align="center" mb={5} flexWrap="wrap" gap={3}>
-              <Heading size="md">Announcements</Heading>
-              <Button colorScheme="pink" rounded="full" onClick={() => setAnnouncementModalOpen(true)}>
-                New Announcement
-              </Button>
-            </Flex>
+            <Heading size="md">Announcements</Heading>
+            <Flex gap={2}>
+            <Button variant="outline" rounded="full" onClick={loadAnnouncements}>
+              Refresh
+            </Button>
+            <Button colorScheme="pink" rounded="full" onClick={() => setAnnouncementModalOpen(true)}>
+              New Announcement
+            </Button>
+          </Flex>
+        </Flex>
 
-            <VStack spacing={6} align="stretch">
-              <Text color="gray.500">
-                Post an announcement for your followers or for a specific event.
+        {loadingAnnouncements && <Text color="gray.500">Loading announcements…</Text>}
+
+        {!loadingAnnouncements && announcements.length === 0 && (
+          <Text color="gray.500">No announcements yet. Click “New Announcement”.</Text>
+        )}
+
+        <VStack spacing={4} align="stretch">
+          {announcements.map((a) => (
+            <Grid
+              key={a._id}
+              templateColumns={{ base: "1fr", md: "2fr 1fr 1fr" }}
+              gap={4}
+              alignItems="start"
+              p={4}
+              borderWidth="1px"
+              borderRadius="xl"
+              _hover={{ bg: "gray.50" }}
+            >
+            <Box>
+              <Text fontWeight="semibold" mb={1}>{a.title}</Text>
+              <Text fontSize="sm" color="gray.700">{a.content}</Text>
+            </Box>
+            <Box>
+              <Text fontSize="sm" color="gray.600">
+                {a.eventId ? `Event: ${a.eventId}` : "Broadcast"}
               </Text>
-            </VStack>
+            </Box>
+            <Box>
+              <Text fontSize="sm" color="gray.500">
+                {new Date(a.createdAt).toLocaleString()}
+              </Text>
+            </Box>
+          </Grid>
+        ))}
+      </VStack>
           </Card>
         )}
 
@@ -1641,7 +1704,11 @@ export default function OrganizerDashboard() {
         <AnnouncementModal
           isOpen={announcementModalOpen}
           onClose={() => setAnnouncementModalOpen(false)}
-          onPosted={() => toast.success("Your followers will see it soon.")}
+          onPosted={async () => {
+            toast.success("Announcement posted");
+            await loadAnnouncements();
+          }}
+
         />
         <CreateGroupModal
           isOpen={createGroupOpen}

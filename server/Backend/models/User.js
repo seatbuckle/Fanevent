@@ -7,6 +7,5 @@ const userSchema = new mongoose.Schema({
     username: { type: String, required: true },
     image: { type: String, required: true }
 })
-const User = mongoose.model('User', userSchema)
-
+const User = usersDb.model("User", userSchema);
 export default User;
