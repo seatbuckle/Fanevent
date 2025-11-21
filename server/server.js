@@ -2,146 +2,140 @@
 import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
-import { clerkMiddleware, requireAuth, clerkClient as clerk } from '@clerk/express';
-import { Webhook } from 'svix'; // ← ADD THIS IMPORT
-import { ensureRoleDefault } from './middleware/ensureRoleDefault.js';
+import { clerkMiddleware, requireAuth, clerkClient } from '@clerk/express';
+import { Webhook } from 'svix';
 
 import connectDB from './Backend/config/db.js';
 import { inngest } from './Backend/inngest/index.js';
 import { inngestRouter } from './Backend/routes/inngest.route.js';
-// ... other imports
+
+// Import all your route files
+import organizerApplicationsRouter from "./Backend/routes/organizerApplications.routes.js";
+import adminOrganizerAppsRouter from "./Backend/routes/admin.organizerApplications.routes.js";
+import adminUsers from "./Backend/routes/admin.users.routes.js";
+import adminStats from "./Backend/routes/admin.stats.routes.js";
+import adminReportsRouter from "./Backend/routes/admin.reports.routes.js";
+import reportsRouter from "./Backend/routes/reports.routes.js";
+import eventsPublic from "./Backend/routes/events.public.js";
+import eventsOrganizer from "./Backend/routes/events.organizer.js";
+import eventsAdmin from "./Backend/routes/events.admin.js";
+import engagement from "./Backend/routes/engagement.js";
+import socialRouter from "./Backend/routes/events.social.js";
+import groupsPublic from "./Backend/routes/groups.public.js";
+import groupsOrganizer from "./Backend/routes/groups.organizer.js";
+import groupsAdmin from "./Backend/routes/groups.admin.js";
+import organizerAnnouncements from './Backend/routes/announcements.organizer.js';
+import notificationsRoutes from "./Backend/routes/notifications.routes.js";
 
 const app = express();
 
-// 1) DB Connection
+// Connect to DB
 await connectDB();
 
-// 2) CORS
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://your-frontend-domain.vercel.app',
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+// ==================================================================
+// CRITICAL: Define raw body routes BEFORE any body parser
+// ==================================================================
 
-// 3) Body parsers - BUT NOT for webhook routes!
-// We'll parse webhook bodies manually
-app.use((req, res, next) => {
-  // Skip body parsing for webhook endpoints
-  if (req.path === '/api/webhooks/clerk' || req.path.startsWith('/api/inngest')) {
-    return next();
-  }
-  express.json({ limit: '20mb' })(req, res, next);
-});
-
-app.use((req, res, next) => {
-  if (req.path === '/api/webhooks/clerk' || req.path.startsWith('/api/inngest')) {
-    return next();
-  }
-  express.urlencoded({ extended: true, limit: '20mb' })(req, res, next);
-});
-
-// 4) PUBLIC ROUTES (before Clerk middleware)
-
-// Inngest endpoint
-app.use('/api/inngest', inngestRouter);
-
-// Clerk webhook with signature verification
+// Clerk webhook - needs raw body for signature verification
 app.post(
   '/api/webhooks/clerk',
-  express.raw({ type: 'application/json' }), // ← Get raw body for signature verification
+  express.raw({ type: 'application/json' }),
   async (req, res) => {
     try {
       const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
-
+      
       if (!WEBHOOK_SECRET) {
-        console.error('❌ CLERK_WEBHOOK_SECRET is not set!');
-        return res.status(500).json({
-          ok: false,
-          message: 'Webhook secret not configured',
-        });
+        console.error('❌ Missing CLERK_WEBHOOK_SECRET');
+        return res.status(500).json({ ok: false, message: 'Webhook secret not configured' });
       }
 
-      // Get headers for signature verification
       const svix_id = req.headers['svix-id'];
       const svix_timestamp = req.headers['svix-timestamp'];
       const svix_signature = req.headers['svix-signature'];
 
-      // Check if headers exist
       if (!svix_id || !svix_timestamp || !svix_signature) {
         console.error('❌ Missing svix headers');
-        return res.status(400).json({
-          ok: false,
-          message: 'Missing svix headers',
-        });
+        return res.status(400).json({ ok: false, message: 'Missing svix headers' });
       }
 
-      // Get the raw body as string
       const payload = req.body.toString();
-
-      // Create Svix instance
       const wh = new Webhook(WEBHOOK_SECRET);
 
       let evt;
       try {
-        // Verify the webhook signature
         evt = wh.verify(payload, {
           'svix-id': svix_id,
           'svix-timestamp': svix_timestamp,
           'svix-signature': svix_signature,
         });
       } catch (err) {
-        console.error('❌ Webhook signature verification failed:', err.message);
-        return res.status(400).json({
-          ok: false,
-          message: 'Invalid signature',
-        });
+        console.error('❌ Webhook verification failed:', err.message);
+        return res.status(400).json({ ok: false, message: 'Invalid signature' });
       }
 
-      // Now we know the webhook is authentic!
       const { type, data } = evt;
-
-      console.log('✅ Verified Clerk webhook:', type, 'User ID:', data?.id || '(no id)');
+      console.log('✅ Verified Clerk webhook:', type, 'ID:', data?.id);
 
       // Forward to Inngest
       const inngestEventName = `clerk/${String(type).replace('.', '/')}`;
-      await inngest.send({
-        name: inngestEventName,
-        data: data,
-      });
-
+      await inngest.send({ name: inngestEventName, data });
       console.log('✅ Forwarded to Inngest:', inngestEventName);
 
-      return res.json({ ok: true, received: true });
+      return res.json({ ok: true });
     } catch (e) {
-      console.error('❌ Clerk webhook error:', e?.message);
-      return res.status(500).json({
-        ok: false,
-        message: 'Webhook processing failed',
-      });
+      console.error('❌ Webhook error:', e);
+      return res.status(500).json({ ok: false, message: e.message });
     }
   }
 );
 
-// 5) Clerk middleware for all other routes
-app.use(clerkMiddleware({
-  onError: (err) => {
-    console.error('Clerk middleware error:', err.message);
-  },
+// ==================================================================
+// Now apply general middleware
+// ==================================================================
+
+// CORS - adjust origins to match your setup
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true,
 }));
 
-// 6) Ensure role default
-app.use(ensureRoleDefault);
+// Body parsers for non-webhook routes
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 
-// 7) Debug endpoint
+// ==================================================================
+// Public routes (no auth required)
+// ==================================================================
+
+// Health check
+app.get('/', (req, res) => res.json({ ok: true, message: 'Server is Live!' }));
+app.get('/health', (req, res) => res.json({ ok: true, timestamp: new Date() }));
+
+// Inngest endpoint (public - Inngest needs to reach it)
+app.use('/api/inngest', inngestRouter);
+
+// ==================================================================
+// Apply Clerk middleware to ALL remaining routes
+// ==================================================================
+
+app.use(clerkMiddleware());
+
+// ==================================================================
+// Debug endpoint - Test if Clerk auth is working
+// ==================================================================
+
 app.get('/api/_whoami', (req, res) => {
-  console.log('🔍 Whoami called');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🔍 WHOAMI DEBUG');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('Request headers:');
+  console.log('  authorization:', req.headers.authorization || '(missing)');
+  console.log('  cookie:', req.headers.cookie || '(missing)');
+  console.log('  origin:', req.headers.origin || '(missing)');
   
   const auth = typeof req.auth === 'function' ? req.auth() : req.auth;
+  console.log('Auth object:', JSON.stringify(auth, null, 2));
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   
   if (!auth?.userId) {
     return res.status(401).json({
@@ -149,6 +143,11 @@ app.get('/api/_whoami', (req, res) => {
       userId: null,
       sessionId: null,
       reason: 'No session on request',
+      debug: {
+        hasAuthHeader: !!req.headers.authorization,
+        hasCookie: !!req.headers.cookie,
+        authObject: auth,
+      }
     });
   }
   
@@ -160,11 +159,18 @@ app.get('/api/_whoami', (req, res) => {
   });
 });
 
-// ... rest of your routes (unchanged)
+// ==================================================================
+// Role management helpers
+// ==================================================================
 
 async function getRole(userId) {
-  const user = await clerk.users.getUser(userId);
-  return user.publicMetadata?.role || 'user';
+  try {
+    const user = await clerkClient.users.getUser(userId);
+    return user.publicMetadata?.role || 'user';
+  } catch (err) {
+    console.error('getRole error:', err.message);
+    return 'user';
+  }
 }
 
 async function requireAdmin(req, res, next) {
@@ -180,9 +186,13 @@ async function requireAdmin(req, res, next) {
     next();
   } catch (err) {
     console.error('requireAdmin error:', err);
-    res.status(500).json({ ok: false, message: 'Failed to verify role' });
+    res.status(500).json({ ok: false, message: 'Role check failed' });
   }
 }
+
+// ==================================================================
+// Auth & admin routes
+// ==================================================================
 
 app.get('/api/auth/role', requireAuth(), async (req, res) => {
   try {
@@ -190,6 +200,7 @@ app.get('/api/auth/role', requireAuth(), async (req, res) => {
     const role = await getRole(auth.userId);
     res.json({ ok: true, role });
   } catch (err) {
+    console.error('Role fetch error:', err);
     res.status(500).json({ ok: false, message: 'Failed to fetch role' });
   }
 });
@@ -200,11 +211,12 @@ app.post('/api/admin/organizers/approve', requireAuth(), requireAdmin, async (re
     if (!applicantUserId) {
       return res.status(400).json({ ok: false, message: 'Missing applicantUserId' });
     }
-    await clerk.users.updateUserMetadata(applicantUserId, {
+    await clerkClient.users.updateUserMetadata(applicantUserId, {
       publicMetadata: { role: 'organizer' },
     });
     res.json({ ok: true });
   } catch (err) {
+    console.error('Approve error:', err);
     res.status(500).json({ ok: false, message: 'Failed to update role' });
   }
 });
@@ -215,19 +227,41 @@ app.post('/api/admin/organizers/demote', requireAuth(), requireAdmin, async (req
     if (!userId) {
       return res.status(400).json({ ok: false, message: 'Missing userId' });
     }
-    await clerk.users.updateUserMetadata(userId, {
+    await clerkClient.users.updateUserMetadata(userId, {
       publicMetadata: { role: 'user' },
     });
     res.json({ ok: true });
   } catch (err) {
+    console.error('Demote error:', err);
     res.status(500).json({ ok: false, message: 'Failed to update role' });
   }
 });
 
-// ... all your other routes
-// (keep them exactly as they are)
+// ==================================================================
+// All other API routes
+// ==================================================================
 
+app.use('/api/reports', reportsRouter);
+app.use('/api/admin/reports', adminReportsRouter);
+app.use('/api/admin/users', adminUsers);
+app.use('/api/organizer-applications', organizerApplicationsRouter);
+app.use('/api/admin/organizer-applications', adminOrganizerAppsRouter);
+app.use('/api/events', eventsPublic);
+app.use('/api/admin/events', eventsAdmin);
+app.use('/api/admin/stats', adminStats);
+app.use('/api', engagement);
+app.use('/api/events', socialRouter);
+app.use('/api/groups', groupsPublic);
+app.use('/api/organizer/groups', groupsOrganizer);
+app.use('/api/admin/groups', groupsAdmin);
+app.use('/api/organizer/events', eventsOrganizer);
+app.use('/api/organizer/announcements', organizerAnnouncements);
+app.use('/api/notifications', notificationsRoutes);
+
+// ==================================================================
 // Error handler
+// ==================================================================
+
 app.use((err, req, res, next) => {
   console.error('❌ Server error:', err);
   res.status(err.status || 500).json({
@@ -236,11 +270,18 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.get('/', (req, res) => res.send('Server is Live!'));
+// ==================================================================
+// Export for Vercel
+// ==================================================================
 
 export default app;
 
+// Local development
 if (!process.env.VERCEL) {
   const port = process.env.PORT || 3000;
-  app.listen(port, () => console.log(`🚀 Server at http://localhost:${port}`));
+  app.listen(port, () => {
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🚀 Server running on http://localhost:${port}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  });
 }
