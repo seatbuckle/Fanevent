@@ -22,6 +22,23 @@ const reportSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
+    reportCategory: {
+      type: String,
+      enum: [
+        "Harassment",
+        "Spam",
+        "Misinformation",
+        "Hate",
+        "Scam/Fraud",
+        "Sexual Content",
+        "Violence",
+        "Other",
+      ],
+      required: true,
+      index: true,
+    },
+
     targetId: {
       type: String,
       required: true,
@@ -63,6 +80,7 @@ const reportSchema = new mongoose.Schema(
 
 // Index for admin queries
 reportSchema.index({ status: 1, createdAt: -1 });
+reportSchema.index({ reportCategory: 1, createdAt: -1 });
 
 const Report = mongoose.model("Report", reportSchema);
 

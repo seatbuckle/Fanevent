@@ -2,6 +2,7 @@ import express from "express";
 import { clerkClient } from "@clerk/express";
 import { requireRole } from "../../middleware/requireRole.js";
 import { requireAuth } from "../../middleware/requireAuth.js";
+import { notify } from "../services/notify.js";
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res) => {
   }
 });
 
-// PUT /api/admin/users/:id/role  body: { role: "user" | "organizer" | "admin" }
+// PUT /api/admin/users/:id/role
 router.put("/users/:id/role", requireAuth, requireRole("admin"), async (req, res) => {
   try {
     const { id } = req.params;
@@ -46,6 +47,41 @@ router.put("/users/:id/role", requireAuth, requireRole("admin"), async (req, res
       publicMetadata: { role },
     });
     res.json({ success: true, role });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// NEW: POST /api/admin/users/:id/warn
+router.post("/users/:id/warn", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const { id } = req.params; // Clerk user id
+    await notify({
+      userId: id,
+      type: "Account Warning",
+      data: { message: req.body?.message || "Your account has received a warning from an admin." },
+      link: "/my-dashboard",
+    });
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// NEW: POST /api/admin/users/:id/ban
+router.post("/users/:id/ban", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    // If you actually ban at Clerk:
+    // await clerkClient.users.banUser(id);
+    await notify({
+      userId: id,
+      type: "Account Banned",
+      data: { message: "Your account has been banned by an admin." },
+    });
+    res.json({ success: true });
   } catch (e) {
     console.error(e);
     res.status(500).json({ success: false, message: e.message });

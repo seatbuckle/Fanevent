@@ -24,37 +24,29 @@ async function sendEmail({ to, subject, html }) {
 // ------------------------------------------------------------------
 // Clerk sync functions (yours, unchanged)
 // ------------------------------------------------------------------
+// Backend/inngest/index.js
+// Backend/inngest/index.js
+// Backend/inngest/index.js
 const syncUserCreation = inngest.createFunction(
   { id: "sync-user-from-clerk" },
   { event: "clerk/user.created" },
   async ({ event }) => {
-    const { id, first_name, last_name, email_addresses, image_url } = event.data;
+    const { id, first_name, last_name, email_addresses, image_url, username } = event.data;
 
     const userData = {
       _id: id,
       email: email_addresses?.[0]?.email_address ?? "",
-      name: `${first_name ?? ""} ${last_name ?? ""}`.trim(),
+      name: `${first_name ?? ""} ${last_name ?? ""}`.trim() || username || id,
+      username: username || id,             // ← ensure it exists
       image: image_url ?? "",
     };
 
     await User.create(userData);
-
     try {
-      await clerk.users.updateUserMetadata(id, {
-        publicMetadata: { role: "user" }, // default role
-      });
+      await clerk.users.updateUserMetadata(id, { publicMetadata: { role: "user" } });
     } catch (err) {
-      console.error("Failed to set default role on Clerk user:", err);
+      console.error("Default role set failed:", err?.message);
     }
-  }
-);
-
-const syncUserDeletion = inngest.createFunction(
-  { id: "delete-user-with-clerk" },
-  { event: "clerk/user.deleted" },
-  async ({ event }) => {
-    const { id } = event.data;
-    await User.findByIdAndDelete(id);
   }
 );
 
@@ -62,11 +54,12 @@ const syncUserUpdation = inngest.createFunction(
   { id: "update-user-from-clerk" },
   { event: "clerk/user.updated" },
   async ({ event }) => {
-    const { id, first_name, last_name, email_addresses, image_url } = event.data;
+    const { id, first_name, last_name, email_addresses, image_url, username } = event.data;
 
     const userData = {
       email: email_addresses?.[0]?.email_address ?? "",
-      name: `${first_name ?? ""} ${last_name ?? ""}`.trim(),
+      name: `${first_name ?? ""} ${last_name ?? ""}`.trim() || username || id,
+      ...(username ? { username } : {}),    // only overwrite if provided
       image: image_url ?? "",
     };
 
@@ -77,6 +70,17 @@ const syncUserUpdation = inngest.createFunction(
     });
   }
 );
+
+
+const syncUserDeletion = inngest.createFunction(
+  { id: "delete-user-with-clerk" },
+  { event: "clerk/user.deleted" },
+  async ({ event }) => {
+    const { id } = event.data;
+    await User.findByIdAndDelete(id);
+  }
+);
+
 
 // ------------------------------------------------------------------
 // Notification jobs

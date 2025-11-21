@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const { Schema } = mongoose;
 
 const NotificationSchema = new Schema(
+
   {
     userId: { type: String, required: true, index: true }, // who the notif is for
     actorId: { type: String }, // who triggered it (optional)
@@ -16,6 +17,8 @@ const NotificationSchema = new Schema(
 
 // sort notifs by newest for this user
 NotificationSchema.index({ userId: 1, createdAt: -1 });
+// Prevent duplicate welcome notifications
+NotificationSchema.index({ userId: 1, type: 1 }, { unique: true, partialFilterExpression: { type: 'Welcome' } });
 
 const Notification =
   mongoose.models.Notification || mongoose.model("Notification", NotificationSchema);

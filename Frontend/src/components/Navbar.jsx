@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { assets, dummyEventsData, dummyGroupsData } from '../assets/assets'
-import { Menu, Search, X, LayoutDashboard, MessageSquare } from 'lucide-react'
+import { Menu, Search, X, Bell, LayoutDashboard, MessageSquare } from 'lucide-react'
 import {
   Box,
   Flex,
@@ -20,8 +20,8 @@ import {
   useUser,
   useClerk,
 } from '@clerk/clerk-react'
-import NotificationBell from '@/components/NotificationBell'
 import AdvancedSearchSheet from './AdvancedSearchModal'
+import NotificationOverlay from './NotificationOverlay'
 
 function useRole() {
   const { user } = useUser()
@@ -34,6 +34,7 @@ const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false)
   const [aura, setAura] = useState({ x: 0, y: 0, visible: false })
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isNotifOpen, setIsNotifOpen] = useState(false)
 
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -207,7 +208,18 @@ const Navbar = () => {
             <Search size={20} />
           </IconButton>
 
-          <NotificationBell />
+          <IconButton
+            variant="ghost"
+            color="#99A0A8"
+            aria-label="Notifications"
+            _hover={{ bg: 'gray.100' }}
+            _focus={{ boxShadow: 'none' }}
+            _active={{ boxShadow: 'none' }}
+            onClick={() => { if (user) setIsNotifOpen(true); }}
+          >
+            <Bell size={20} />
+          </IconButton>
+  <NotificationOverlay isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} />
 
           <SignedOut>
             <Button
@@ -398,7 +410,15 @@ const Navbar = () => {
               >
                 <Search size={20} />
               </IconButton>
-              <NotificationBell />
+              <IconButton
+                aria-label="Notifications"
+                variant="outline"
+                flex="1"
+                h="50px"
+                _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
+              >
+                <Bell size={20} />
+              </IconButton>
             </Flex>
 
             <Box h="1px" bg="gray.100" my={4} />

@@ -10,11 +10,31 @@ export const ensureRoleDefault = async (req, res, next) => {
     const uid = req.auth?.userId;
     if (!uid) return next();
 
-    const u = await clerkClient.users.getUser(uid);
+    let u = await clerkClient.users.getUser(uid);
     if (!u.publicMetadata?.role) {
       await clerkClient.users.updateUserMetadata(uid, {
         publicMetadata: { role: "user" },
       });
+      // Send welcome notification immediately after setting role
+      try {
+        const Notification = (await import('../Backend/models/Notification.js')).default;
+        await Notification.findOneAndUpdate(
+          { userId: uid, type: 'Welcome' },
+          {
+            $setOnInsert: {
+              userId: uid,
+              type: 'Welcome',
+              data: 'Welcome to Fanevent!',
+              read: false,
+            }
+          },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        if (err.code !== 11000) {
+          console.error('Failed to send welcome notification:', err.message);
+        }
+      }
     }
   } catch (e) {
     console.error("ensureRoleDefault error:", e.message);
