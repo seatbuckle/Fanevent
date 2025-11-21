@@ -31,6 +31,12 @@ import { clerk } from './api/clerk.js';
 
 const app = express();
 
+app.use((req, res, next) => {
+  console.log("→", req.method, req.path);
+  next();
+});
+
+
 // 1) DB FIRST
 await connectDB();
 
@@ -41,6 +47,8 @@ app.use('/api/inngest', inngestRouter);
 app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
+
+
 
 // 4) Clerk webhook → forwards to Inngest
 app.post('/api/webhooks/clerk', async (req, res) => {
@@ -60,10 +68,12 @@ app.post('/api/webhooks/clerk', async (req, res) => {
 
 // 5) Clerk middleware (skip only the webhook/inngest paths)
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/inngest')) return next();
-  if (req.path.startsWith('/api/webhooks/clerk')) return next();
+  const p = req.path || req.url || "";
+  if (p.startsWith("/api/inngest")) return next();
+  if (p.startsWith("/api/webhooks/clerk")) return next();
   return clerkMiddleware()(req, res, next);
 });
+
 
 // Ensure default role exists for newly seen users
 app.use(ensureRoleDefault);
