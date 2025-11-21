@@ -6,7 +6,7 @@ import Notification from "../models/Notification.js";
 import Event from "../models/Event.js"; // adjust if your path/name differs
 
 // 🔹 Clerk server SDK
-import { clerk } from "../../api/clerk.js";
+import { clerkClient as clerk } from "@clerk/express";
 
 // ------------------------------------------------------------------
 // Inngest client

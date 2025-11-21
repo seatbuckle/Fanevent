@@ -3,7 +3,7 @@ import express from "express";
 import OrganizerApplication from "../models/OrganizerApplication.js";
 import { requireRole } from "../../middleware/roles.js";
 // Prefer the same Clerk instance you use elsewhere:
-import { clerk } from "../../api/clerk.js"; // ✅ keep consistent with server.js
+import { clerkClient as clerk } from '@clerk/express'
 
 const router = express.Router();
 
