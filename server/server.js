@@ -164,12 +164,8 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ ok: false, message: err?.message || 'Internal Server Error' });
 });
 
-app.get('/', (_req, res) => res.send('Server is Live!'));
 
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api/')) return next(); // don't swallow API
-  res.send('Server is Live!');
-});
+app.get('/', (req, res) => res.send('Server is Live!'));
 
 export default app;
 
