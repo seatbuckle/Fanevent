@@ -17,7 +17,7 @@ export const ensureRoleDefault = async (req, res, next) => {
       });
       // Send welcome notification immediately after setting role
       try {
-        const Notification = (await import('../Backend/models/Notification.js')).default;
+        const Notification = (await import('../models/Notification.js')).default;
         await Notification.findOneAndUpdate(
           { userId: uid, type: 'Welcome' },
           {

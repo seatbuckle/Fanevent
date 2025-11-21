@@ -60,13 +60,14 @@ app.post('/api/webhooks/clerk', async (req, res) => {
 
 // 5) Clerk middleware (skip only the webhook/inngest paths)
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/inngest')) return next();
-  if (req.path.startsWith('/api/webhooks/clerk')) return next();
+  const p = req.path;
+  if (p.startsWith('/api/inngest') || p.startsWith('/api/webhooks/clerk')) return next();
   return clerkMiddleware()(req, res, next);
 });
 
 // Ensure default role exists for newly seen users
 app.use(ensureRoleDefault);
+
 
 // Whoami
 app.get('/api/_whoami', requireAuth(), (req, res) => {
