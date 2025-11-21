@@ -96,18 +96,16 @@ app.post('/api/webhooks/clerk', async (req, res) => {
   }
 });
 
-app.all(
-  '/api/inngest-body-check',
-  express.raw({ type: '*/*' }),
-  (req, res) => {
-    console.log('[/api/inngest-body-check] hit:', req.method);
-    res.json({
-      method: req.method,
-      len: Buffer.isBuffer(req.body) ? req.body.length : null,
-      isBuffer: Buffer.isBuffer(req.body),
-    });
-  }
-);
+// POST-only raw body check
+app.post('/api/inngest-body-check', express.raw({ type: '*/*' }), (req, res) => {
+  console.log('[/api/inngest-body-check] hit:', req.method, 'len:', Buffer.isBuffer(req.body) ? req.body.length : null);
+  res.json({
+    method: req.method,
+    len: Buffer.isBuffer(req.body) ? req.body.length : null,
+    isBuffer: Buffer.isBuffer(req.body),
+  });
+});
+
 
 // -----------------------------
 // Clerk middleware
