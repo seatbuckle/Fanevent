@@ -1,7 +1,8 @@
 // server/inngest.route.js
 import express from "express";
 import { serve } from "inngest/express";
-import { inngestRouter } from './Backend/routes/inngest.route.js';
+import { inngest, functions } from "../inngest/index.js";
+
 const inngestRouter = express.Router();
 
 // v3: ONLY raw → serve({ client, functions }) — no eventKey/signingKey here
