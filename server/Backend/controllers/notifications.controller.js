@@ -1,32 +1,5 @@
-// Delete all read notifications for the logged-in user
-export async function deleteReadNotifications(req, res) {
-  try {
-    const userId = req.auth.userId;
-    if (!userId) return res.status(401).json({ ok: false, message: 'Unauthorized' });
-    await Notification.deleteMany({ userId, read: true });
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false, message: 'Could not delete read notifications' });
-  }
-}
-// Get total notification count for the logged-in user
-export async function getNotificationCount(req, res) {
-  try {
-    const userId = req.auth.userId;
-    if (!userId) return res.status(401).json({ ok: false, message: 'Unauthorized' });
-    const count = await Notification.countDocuments({ userId });
-    return res.json({ ok: true, count });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false, message: 'Could not get notification count' });
-  }
-}
 import Notification from "../models/Notification.js";
 
-<<<<<<< HEAD
-/** Create a notification. Expects { userId, actorId, type, data, link } in body. */
-=======
 /* ---------- Helpers ---------- */
 const getReqUserId = (req) => {
   try {
@@ -48,7 +21,6 @@ const jsonErr = (res, code, message) =>
  * - If userId provided and !== caller, only allowed when req.allowActOnBehalf === true
  *   (e.g., set this in an admin-only route/middleware).
  */
->>>>>>> KaydenLe
 export async function createNotification(req, res) {
   try {
     const callerId = getReqUserId(req);
@@ -74,24 +46,14 @@ export async function createNotification(req, res) {
 
     return jsonOK(res, { notification: doc });
   } catch (err) {
-<<<<<<< HEAD
-    console.error(err);
-    return res.status(500).json({ ok: false, message: "Failed to create notification" });
-=======
     console.error("createNotification error:", err);
     return jsonErr(res, 500, "Failed to create notification");
->>>>>>> KaydenLe
   }
 }
 
 /**
-<<<<<<< HEAD
- * List notifications for the authenticated user.
- * Supports `limit` (default 50, max 100) and `before` (ISO date) query params.
-=======
  * GET /api/notifications?limit=50&before=ISO_DATE
  * Lists notifications for the authenticated user.
->>>>>>> KaydenLe
  */
 export async function listNotifications(req, res) {
   try {
@@ -101,11 +63,7 @@ export async function listNotifications(req, res) {
     const requestedLimit = parseInt(req.query?.limit || "50", 10);
     const limit = Number.isNaN(requestedLimit) ? 50 : Math.min(100, Math.max(1, requestedLimit));
 
-<<<<<<< HEAD
-    const query = { userId };
-=======
     const query = { userId: String(userId) };
->>>>>>> KaydenLe
     if (req.query?.before) {
       const beforeDate = new Date(req.query.before);
       if (!Number.isNaN(beforeDate.getTime())) query.createdAt = { $lt: beforeDate };
@@ -118,14 +76,6 @@ export async function listNotifications(req, res) {
 
     return jsonOK(res, { notifications });
   } catch (err) {
-<<<<<<< HEAD
-    console.error(err);
-    return res.status(500).json({ ok: false, message: "Failed to list notifications" });
-  }
-}
-
-/** Mark a single notification as read. */
-=======
     console.error("listNotifications error:", err);
     return jsonErr(res, 500, "Failed to list notifications");
   }
@@ -156,7 +106,6 @@ export async function getNotificationCount(req, res) {
  * PATCH /api/notifications/:id/read
  * Marks a single notification as read (if owned by the caller).
  */
->>>>>>> KaydenLe
 export async function markRead(req, res) {
   try {
     const userId = getReqUserId(req);
@@ -170,26 +119,6 @@ export async function markRead(req, res) {
     );
     if (!doc) return jsonErr(res, 404, "Not found");
 
-<<<<<<< HEAD
-    const notification = await Notification.findById(id);
-    if (!notification) return res.status(404).json({ ok: false, message: "Not found" });
-
-    // Compare string forms to avoid ObjectId mismatch
-    if (notification.userId?.toString() !== userId) {
-      return res.status(403).json({ ok: false, message: "Forbidden" });
-    }
-
-    notification.read = true;
-    await notification.save();
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false, message: "Failed to mark read" });
-  }
-}
-
-/** Mark all unread notifications for the authenticated user as read. */
-=======
     return jsonOK(res, { notification: doc });
   } catch (err) {
     console.error("markRead error:", err);
@@ -201,7 +130,6 @@ export async function markRead(req, res) {
  * POST /api/notifications/mark-all-read
  * Marks all unread as read for the caller.
  */
->>>>>>> KaydenLe
 export async function markAllRead(req, res) {
   try {
     const userId = getReqUserId(req);
@@ -214,14 +142,6 @@ export async function markAllRead(req, res) {
 
     return jsonOK(res, { modifiedCount: result?.modifiedCount ?? 0 });
   } catch (err) {
-<<<<<<< HEAD
-    console.error(err);
-    return res.status(500).json({ ok: false, message: "Failed to mark all read" });
-  }
-}
-
-/** Delete a notification owned by the authenticated user. */
-=======
     console.error("markAllRead error:", err);
     return jsonErr(res, 500, "Failed to mark all read");
   }
@@ -248,7 +168,6 @@ export async function deleteReadNotifications(req, res) {
  * DELETE /api/notifications/:id
  * Deletes a single notification if owned by the caller.
  */
->>>>>>> KaydenLe
 export async function deleteNotification(req, res) {
   try {
     const userId = getReqUserId(req);
@@ -258,21 +177,9 @@ export async function deleteNotification(req, res) {
     const result = await Notification.deleteOne({ _id: id, userId: String(userId) });
     if (!result?.deletedCount) return jsonErr(res, 404, "Not found");
 
-<<<<<<< HEAD
-    const notification = await Notification.findById(id);
-    if (!notification) return res.status(404).json({ ok: false, message: "Not found" });
-    if (notification.userId?.toString() !== userId) return res.status(403).json({ ok: false, message: "Forbidden" });
-
-    await notification.deleteOne();
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false, message: "Failed to delete notification" });
-=======
     return jsonOK(res);
   } catch (err) {
     console.error("deleteNotification error:", err);
     return jsonErr(res, 500, "Failed to delete notification");
->>>>>>> KaydenLe
   }
 }

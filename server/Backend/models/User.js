@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { usersDb } from "../config/db.js";
 
 const userSchema = new mongoose.Schema({
     _id: { type: String, required: true },

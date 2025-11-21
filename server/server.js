@@ -26,6 +26,7 @@ import groupsAdmin from "./Backend/routes/groups.admin.js";
 import organizerAnnouncements from './Backend/routes/announcements.organizer.js';
 import notificationsRoutes from "./Backend/routes/notifications.routes.js";
 
+
 // Clerk server SDK instance
 import { clerk } from './api/clerk.js';
 
