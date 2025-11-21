@@ -42,12 +42,12 @@ app.use(
   '/api/inngest',
   express.raw({ type: '*/*' }),
   serve({
-    client: inngest,                   // <-- v3 requires options object
-    functions,                         // your exported functions array
-    signingKey: process.env.INNGEST_SIGNING_KEY, // explicit is safest
-    eventKey: process.env.INNGEST_EVENT_KEY,     // optional, for inngest.send()
+    client: inngest,                       // v3: pass inside options
+    functions,
+    signingKey: process.env.INNGEST_SIGNING_KEY,
   })
 );
+
 
 
 // -----------------------------
@@ -81,17 +81,6 @@ app.post('/api/webhooks/clerk', async (req, res) => {
   }
 });
 
-// POST-only raw body check
-app.post('/api/inngest-body-check', express.raw({ type: '*/*' }), (req, res) => {
-  console.log('[/api/inngest-body-check] hit:', req.method, 'len:', Buffer.isBuffer(req.body) ? req.body.length : null);
-  res.json({
-    method: req.method,
-    len: Buffer.isBuffer(req.body) ? req.body.length : null,
-    isBuffer: Buffer.isBuffer(req.body),
-  });
-});
-
-
 // -----------------------------
 // Clerk middleware
 // Skip it for /api/inngest and /api/webhooks/clerk
@@ -99,7 +88,6 @@ app.post('/api/inngest-body-check', express.raw({ type: '*/*' }), (req, res) => 
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/inngest')) return next();
   if (req.path.startsWith('/api/webhooks/clerk')) return next();
-   if (req.path.startsWith('/api/inngest-body-check')) return next(); // <-- add this
   return clerkMiddleware()(req, res, next);
 });
 
