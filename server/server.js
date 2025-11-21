@@ -37,15 +37,23 @@ const app = express();
 // -----------------------------
 await connectDB();
 
-/**
- * Inngest FIRST, with RAW body.
- * Do NOT put express.json() or Clerk before this.
- */
+// Inngest FIRST, with RAW body (unchanged)
 app.use(
   '/api/inngest',
   express.raw({ type: '*/*' }),
+
+  // NEW debug middleware
+  (req, _res, next) => {
+    const sig = req.headers['x-inngest-signature'];
+    const hasKey = !!process.env.INNGEST_SIGNING_KEY;
+    console.log('[/api/inngest] resync debug → sig:', sig ? 'present' : 'missing', '| signing key present:', hasKey);
+    next();
+  },
+
+  // Inngest handler
   serve({ client: inngest, functions })
 );
+
 
 // -----------------------------
 // Standard middleware
