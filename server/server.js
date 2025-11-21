@@ -46,12 +46,20 @@ app.use(
   (req, _res, next) => {
     const sig = req.headers['x-inngest-signature'];
     const hasKey = !!process.env.INNGEST_SIGNING_KEY;
+    console.log(
+  '[/api/inngest] signing key tail:',
+  (process.env.INNGEST_SIGNING_KEY || '').slice(-8)
+);
     console.log('[/api/inngest] resync debug → sig:', sig ? 'present' : 'missing', '| signing key present:', hasKey);
     next();
   },
 
   // Inngest handler
-  serve({ client: inngest, functions })
+  serve({
+    client: inngest,
+    functions,
+    signingKey: process.env.INNGEST_SIGNING_KEY, // ← explicit
+  })
 );
 
 
