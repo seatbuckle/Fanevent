@@ -21,6 +21,7 @@ import {
   useClerk,
 } from '@clerk/clerk-react'
 import AdvancedSearchSheet from './AdvancedSearchModal'
+import NotificationOverlay from './NotificationOverlay'
 
 function useRole() {
   const { user } = useUser()
@@ -33,6 +34,7 @@ const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false)
   const [aura, setAura] = useState({ x: 0, y: 0, visible: false })
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isNotifOpen, setIsNotifOpen] = useState(false)
 
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -213,9 +215,11 @@ const Navbar = () => {
             _hover={{ bg: 'gray.100' }}
             _focus={{ boxShadow: 'none' }}
             _active={{ boxShadow: 'none' }}
+            onClick={() => { if (user) setIsNotifOpen(true); }}
           >
             <Bell size={20} />
           </IconButton>
+  <NotificationOverlay isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} />
 
           <SignedOut>
             <Button
