@@ -41,26 +41,13 @@ await connectDB();
 app.use(
   '/api/inngest',
   express.raw({ type: '*/*' }),
-
-  // NEW debug middleware
-  (req, _res, next) => {
-    const sig = req.headers['x-inngest-signature'];
-    const hasKey = !!process.env.INNGEST_SIGNING_KEY;
-    console.log(
-  '[/api/inngest] signing key tail:',
-  (process.env.INNGEST_SIGNING_KEY || '').slice(8)
-);
-console.log('[inngest] app id:', inngest.id);
-
-    console.log('[/api/inngest] resync debug → sig:', sig ? 'present' : 'missing', '| signing key present:', hasKey);
-    next();
-  },
-
-  // Inngest handler
   serve({
     client: inngest,
     functions,
-    signingKey: process.env.INNGEST_SIGNING_KEY, // ← explicit
+    // make verification explicit
+    signingKey: process.env.INNGEST_SIGNING_KEY,
+    // not used for verify, but good to wire for sends:
+    eventKey: process.env.INNGEST_EVENT_KEY,
   })
 );
 
