@@ -6,7 +6,6 @@ import { serve } from 'inngest/express';
 import { clerkMiddleware, requireAuth } from '@clerk/express';
 import { ensureRoleDefault } from './middleware/ensureRoleDefault.js'; 
 
-
 // Adjust these import paths to your tree:
 import connectDB from './Backend/config/db.js';
 import { inngest, functions } from './Backend/inngest/index.js'; 
@@ -14,6 +13,8 @@ import organizerApplicationsRouter from "./Backend/routes/organizerApplications.
 import adminOrganizerAppsRouter from "./Backend/routes/admin.organizerApplications.routes.js";
 import adminUsers from "./Backend/routes/admin.users.routes.js";
 import adminStats from "./Backend/routes/admin.stats.routes.js";
+import adminReportsRouter from "./Backend/routes/admin.reports.routes.js";
+import reportsRouter from "./Backend/routes/reports.routes.js";
 import eventsPublic from "./Backend/routes/events.public.js";
 import eventsOrganizer from "./Backend/routes/events.organizer.js";
 import eventsAdmin from "./Backend/routes/events.admin.js";
@@ -22,8 +23,7 @@ import socialRouter from "./Backend/routes/events.social.js";
 import groupsPublic from "./Backend/routes/groups.public.js";
 import groupsOrganizer from "./Backend/routes/groups.organizer.js";
 import groupsAdmin from "./Backend/routes/groups.admin.js";
-import messagesRouter from "./Backend/routes/messages.routes.js";
-import notificationsRouter from "./Backend/routes/notifications.routes.js";
+import organizerAnnouncements from './Backend/routes/announcements.organizer.js';
 
 
 // Clerk server SDK instance
@@ -44,7 +44,7 @@ app.use(
   serve({ client: inngest, functions })
 );
 
-// Now your usual middleware/routes
+// Middleware/routes
 app.use(cors());
 app.use(express.json({ limit: "20mb" })); 
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
@@ -132,6 +132,10 @@ app.post('/api/admin/organizers/demote', requireAuth(), requireAdmin, async (req
   }
 });
 
+// Admin Report Route Registrations
+app.use('/api/reports', reportsRouter);
+app.use('/api/admin/reports', adminReportsRouter);
+
 
 // -----------------------------
 // Existing admin/users routes
@@ -157,8 +161,7 @@ app.use("/api/groups", groupsPublic);
 app.use("/api/organizer/groups", groupsOrganizer);
 app.use("/api/admin/groups", groupsAdmin);
 app.use("/api/organizer/events", eventsOrganizer);
-app.use('/api/messages', messagesRouter);
-app.use('/api/notifications', notificationsRouter);
+app.use('/api/organizer/announcements', organizerAnnouncements);
 
 // --- Global error handler: keep at the end ---
 app.use((err, req, res, next) => {
