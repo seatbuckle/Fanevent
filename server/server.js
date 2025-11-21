@@ -69,11 +69,21 @@ app.use((req, res, next) => {
 app.use(ensureRoleDefault);
 
 
-// Whoami
-app.get('/api/_whoami', requireAuth(), (req, res) => {
-  const a = typeof req.auth === 'function' ? req.auth() : req.auth;
-  res.json({ ok: true, userId: a?.userId || null });
-});
+
+// Put this BEFORE any global auth wrapper or routers:
+app.get('/api/_whoami', (req, res) => {
+  try {
+    const { userId, sessionId } = getAuth(req) || {}
+    if (!userId) {
+      // No redirect — just JSON
+      return res.status(401).json({ ok: false, userId: null, sessionId: null })
+    }
+    return res.json({ ok: true, userId, sessionId })
+  } catch (e) {
+    console.error('whoami error:', e?.message)
+    return res.status(500).json({ ok: false, message: 'whoami failed' })
+  }
+})
 
 // Role helpers & routes (unchanged) …
 async function getRole(userId) {
