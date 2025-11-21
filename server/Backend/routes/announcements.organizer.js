@@ -1,6 +1,6 @@
 import express from 'express';
 import { requireAuth } from '@clerk/express';
-import { clerk } from '../../api/clerk.js';
+import { clerkClient as clerk } from '@clerk/express'
 import { createAnnouncement, listMyAnnouncements } from '../controllers/announcements.controller.js';
 
 

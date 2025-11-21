@@ -2,7 +2,7 @@
 import express from "express";
 import Report from "../models/Report.js";
 import { requireAuth } from "../../middleware/requireAuth.js";
-import { clerk } from "../../api/clerk.js";
+import { clerkClient as clerk } from '@clerk/express'
 
 const router = express.Router();
 

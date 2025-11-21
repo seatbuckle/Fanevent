@@ -6,7 +6,7 @@ import RSVP from "../models/RSVP.js";
 import Like from "../models/Like.js";
 import { requireAuth } from "../../middleware/requireAuth.js";
 import { requireRole } from "../../middleware/requireRole.js";
-import { clerk } from "../../api/clerk.js";
+import { clerkClient as clerk } from '@clerk/express'
 
 const r = Router();
 
