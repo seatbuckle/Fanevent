@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { assets, dummyEventsData, dummyGroupsData } from '../assets/assets'
-import { Menu, Search, X, Bell, LayoutDashboard, MessageSquare } from 'lucide-react'
+import { Menu, Search, X, LayoutDashboard, MessageSquare } from 'lucide-react'
 import {
   Box,
   Flex,
@@ -20,6 +20,7 @@ import {
   useUser,
   useClerk,
 } from '@clerk/clerk-react'
+import NotificationBell from '@/components/NotificationBell'
 import AdvancedSearchSheet from './AdvancedSearchModal'
 
 function useRole() {
@@ -206,16 +207,7 @@ const Navbar = () => {
             <Search size={20} />
           </IconButton>
 
-          <IconButton
-            variant="ghost"
-            color="#99A0A8"
-            aria-label="Notifications"
-            _hover={{ bg: 'gray.100' }}
-            _focus={{ boxShadow: 'none' }}
-            _active={{ boxShadow: 'none' }}
-          >
-            <Bell size={20} />
-          </IconButton>
+          <NotificationBell />
 
           <SignedOut>
             <Button
@@ -406,15 +398,7 @@ const Navbar = () => {
               >
                 <Search size={20} />
               </IconButton>
-              <IconButton
-                aria-label="Notifications"
-                variant="outline"
-                flex="1"
-                h="50px"
-                _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
-              >
-                <Bell size={20} />
-              </IconButton>
+              <NotificationBell />
             </Flex>
 
             <Box h="1px" bg="gray.100" my={4} />

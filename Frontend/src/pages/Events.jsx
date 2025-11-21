@@ -4,6 +4,8 @@ import { Box, Text, Flex } from "@chakra-ui/react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import EventCard from "@/components/EventCard";
 import AdvancedSearchSheet from "@/components/AdvancedSearchModal";
+import ReportModal from "@/components/ui/ReportModal";
+import { useDisclosure } from '@chakra-ui/react';
 
 const normalize = (s) => (s || "").toString().toLowerCase();
 const cleanText = (s = "") => s.replace(/\s+/g, " ").trim();
@@ -48,6 +50,10 @@ const Events = () => {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  
+  // Report modal state
+  const { isOpen: isReportOpen, onOpen: onReportOpen, onClose: onReportClose } = useDisclosure();
+  const [reportingEvent, setReportingEvent] = useState(null);
 
   const q = normalize(params.get("q") || "");
   const type = params.get("type") || "";
@@ -74,7 +80,7 @@ const Events = () => {
         const qp = new URLSearchParams();
         if (q) qp.set("query", q);
         if (tags.length) qp.set("tags", tags.join(","));
-        if (dates.length) qp.set("dates", dates.join(",")); // backend may ignore; we’ll filter client-side anyway
+        if (dates.length) qp.set("dates", dates.join(",")); // backend may ignore; we'll filter client-side anyway
         const url = `/api/events?${qp.toString()}`;
 
         let list = [];
@@ -229,7 +235,17 @@ const Events = () => {
           {loading ? (
             <Text color="gray.500" mt={10}>Loading…</Text>
           ) : filtered.length ? (
-            filtered.map((event) => <EventCard key={event._id} event={event} />)
+            filtered.map((event) => (
+              <EventCard 
+                key={event._id} 
+                event={event}
+                onReport={(evt) => {
+                  console.log('Report clicked for event:', evt.title);
+                  setReportingEvent(evt);
+                  onReportOpen();
+                }}
+              />
+            ))
           ) : (
             <Text color="gray.500" mt={20}>
               No events match your filters.
@@ -247,6 +263,21 @@ const Events = () => {
         groups={groups}
         initialKind="Events"
       />
+
+      {/* Report Modal */}
+      {reportingEvent && (
+        <ReportModal
+          isOpen={isReportOpen}
+          onClose={() => {
+            console.log('Closing report modal');
+            onReportClose();
+            setReportingEvent(null);
+          }}
+          reportType="Event"
+          targetId={reportingEvent._id}
+          targetName={reportingEvent.title}
+        />
+      )}
     </Box>
   );
 };

@@ -30,6 +30,7 @@ import {
 import ReactPlayer from "react-player";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
+import ReportModal from "@/components/ui/ReportModal";
 
 const isMongoId = (s = "") => /^[a-fA-F0-9]{24}$/.test(s);
 
@@ -64,8 +65,8 @@ const normalizeEvent = (raw = {}) => {
       typeof raw.attendeesCount === "number"
         ? raw.attendeesCount
         : typeof raw.rsvpCount === "number"
-          ? raw.rsvpCount
-          : 0,
+        ? raw.rsvpCount
+        : 0,
     status: raw.status || "approved",
     createdBy: raw.createdBy,
   };
@@ -124,6 +125,10 @@ export default function EventDetails() {
   const [isCheckedOut, setIsCheckedOut] = useState(false);
   const [checkInTime, setCheckInTime] = useState(null);
   const [hoursLogged, setHoursLogged] = useState(null);
+
+  // chooser + modal payload (modal is controlled by payload presence)
+  const [isChooserOpen, setIsChooserOpen] = useState(false);
+  const [reportPayload, setReportPayload] = useState(null); // { type, id, name }
 
   const [isMediaOpen, setIsMediaOpen] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState(null);
@@ -344,8 +349,17 @@ export default function EventDetails() {
     }
   };
 
-  const handleReport = () =>
-    toast("Report submitted – thank you!", { icon: "⚠️" });
+  // ----- reporting -----
+  const openReportChooser = () => {
+    if (!requireLogin()) return;
+    setIsChooserOpen(true);
+  };
+
+  const selectReportOption = (type, targetId, name) => {
+    // close chooser, then open modal by setting payload
+    setIsChooserOpen(false);
+    setReportPayload({ type, id: targetId, name });
+  };
 
   const mapQuery = useMemo(
     () =>
@@ -458,21 +472,87 @@ export default function EventDetails() {
                     <Text fontSize={{ base: "2xl", md: "3xl" }} fontWeight="bold">
                       {event.title}
                     </Text>
-
-                    {/* Like Count inline with flag to save room */}
-                    <Flex align="center" gap={2}>
+                    {/* Like Count + Report */}
+                    <Flex align="center" gap={2} position="relative" zIndex={20}>
                       <Badge colorScheme="pink" variant="subtle">
                         {likeCount.toLocaleString()} {likeCount === 1 ? "Like" : "Likes"}
                       </Badge>
                       <IconButton
                         variant="ghost"
-                        colorScheme="pink"
                         aria-label="Report"
-                        onClick={handleReport}
+                        onClick={openReportChooser}
                         color="pink.500"
+                        _hover={{ bg: "pink.50" }}
                       >
                         <Flag size={18} />
                       </IconButton>
+
+                      {/* Click-away backdrop */}
+                      {isChooserOpen && (
+                        <Box
+                          position="fixed"
+                          inset={0}
+                          zIndex={19}
+                          onClick={() => setIsChooserOpen(false)}
+                        />
+                      )}
+
+                      {/* Chooser */}
+                      {isChooserOpen && (
+                        <Box
+                          position="absolute"
+                          top="36px"
+                          right={0}
+                          bg="white"
+                          border="1px solid"
+                          borderColor="gray.200"
+                          borderRadius="md"
+                          boxShadow="lg"
+                          minW="220px"
+                          zIndex={21}
+                        >
+                          <Text
+                            px={3}
+                            py={2}
+                            fontSize="xs"
+                            color="gray.500"
+                            borderBottom="1px solid"
+                            borderColor="gray.100"
+                          >
+                            What would you like to report?
+                          </Text>
+
+                          <Button
+                            variant="ghost"
+                            justifyContent="flex-start"
+                            w="100%"
+                            borderRadius={0}
+                            px={3}
+                            py={2.5}
+                            onClick={() => selectReportOption("Event", event._id, event.title)}
+                            _hover={{ bg: "gray.50" }}
+                          >
+                            Report Event
+                          </Button>
+
+                          {!!event?.groupId && (event.groupName || event.category) && (
+                            <Button
+                              variant="ghost"
+                              justifyContent="flex-start"
+                              w="100%"
+                              borderRadius={0}
+                              px={3}
+                              py={2.5}
+                              onClick={() =>
+                                selectReportOption("Group", event.groupId, event.groupName || event.category)
+                              }
+                              _hover={{ bg: "gray.50" }}
+                            >
+                              Report Host Group
+                            </Button>
+                          )}
+                        </Box>
+                      )}
                     </Flex>
                   </Flex>
 
@@ -599,11 +679,11 @@ export default function EventDetails() {
                         <Text fontWeight="medium" fontSize="sm">
                           {event.startAt
                             ? new Date(event.startAt).toLocaleDateString("en-US", {
-                              weekday: "long",
-                              month: "long",
-                              day: "numeric",
-                              year: "numeric",
-                            })
+                                weekday: "long",
+                                month: "long",
+                                day: "numeric",
+                                year: "numeric",
+                              })
                             : "TBD"}
                         </Text>
                         <Text fontSize="xs" color="gray.600">
@@ -937,7 +1017,6 @@ export default function EventDetails() {
                     color="gray.700"
                   >
                     {(() => {
-                      // Prefer new schema: event.group ; fall back to legacy: event.groupName ; then category
                       const name =
                         (event?.group && String(event.group)) ||
                         (event?.groupName && String(event.groupName)) ||
@@ -959,13 +1038,10 @@ export default function EventDetails() {
 
                   <Box>
                     <Text fontWeight="semibold">
-                      {
-                        // Display the canonical hosted-by name
-                        (event?.group && String(event.group)) ||
+                      {(event?.group && String(event.group)) ||
                         (event?.groupName && String(event.groupName)) ||
                         (event?.category && String(event.category)) ||
-                        "Group"
-                      }
+                        "Group"}
                     </Text>
 
                     {!!event?.groupId && (
@@ -981,7 +1057,6 @@ export default function EventDetails() {
                   </Box>
                 </Flex>
               </Box>
-
             </Box>
           </Flex>
         </Box>
@@ -1044,7 +1119,7 @@ export default function EventDetails() {
                 const isVideo = media.type === "video" || media.type === "youtube";
                 const thumb = isVideo
                   ? getVideoThumb(media.url) ||
-                  mediaGallery.find((m) => m.type === "image")?.url
+                    mediaGallery.find((m) => m.type === "image")?.url
                   : media.url;
                 return (
                   <Box
@@ -1216,6 +1291,15 @@ export default function EventDetails() {
           )}
         </Box>
       )}
+
+      {/* ---- REPORT MODAL (controlled by reportPayload presence) ---- */}
+      <ReportModal
+        isOpen={!!reportPayload}
+        onClose={() => setReportPayload(null)}
+        reportType={reportPayload?.type}
+        targetId={reportPayload?.id}
+        targetName={reportPayload?.name}
+      />
     </>
   );
 }
