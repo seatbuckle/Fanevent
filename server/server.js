@@ -96,6 +96,12 @@ app.post('/api/webhooks/clerk', async (req, res) => {
   }
 });
 
+
+app.post('/api/inngest-body-check', express.raw({ type: '*/*' }), (req, res) => {
+  res.json({ len: req.body?.length ?? null, isBuffer: Buffer.isBuffer(req.body) });
+});
+
+
 // -----------------------------
 // Clerk middleware
 // Skip it for /api/inngest and /api/webhooks/clerk
