@@ -1,7 +1,7 @@
 // server/inngest.route.js
 import express from "express";
 import { serve } from "inngest/express";
-import { inngest, functions } from "./Backend/inngest/index.js";
+import { inngest, functions } from "../inngest/index.js";
 
 const inngestRouter = express.Router();
 

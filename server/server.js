@@ -26,7 +26,7 @@ import organizerAnnouncements from './Backend/routes/announcements.organizer.js'
 import notificationsRoutes from "./Backend/routes/notifications.routes.js";
 
 // ✅ correct path — your router file is at server/inngest.route.js
-import { inngestRouter } from './inngest.route.js';
+import { inngestRouter } from './Backend/routes/inngest.route.js';
 import { clerk } from './api/clerk.js';
 
 const app = express();
