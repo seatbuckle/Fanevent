@@ -41,6 +41,44 @@ const mergeDateTime = (dateStr, timeStr) => {
   return base.toISOString();
 };
 
+// Status pill styles (match admin dashboard look)
+const getStatusStyles = (status) => {
+  const s = (status || "").toLowerCase();
+  switch (s) {
+    case "approved":
+      return {
+        bg: "green.50",
+        color: "green.700",
+        borderColor: "green.200",
+        label: "Approved",
+      };
+    case "rejected":
+      return {
+        bg: "red.50",
+        color: "red.700",
+        borderColor: "red.200",
+        label: "Rejected",
+      };
+    case "cancelled":
+    case "canceled":
+      return {
+        bg: "gray.100",
+        color: "gray.700",
+        borderColor: "gray.300",
+        label: "Cancelled",
+      };
+    case "pending":
+    default:
+      return {
+        bg: "yellow.50",
+        color: "yellow.700",
+        borderColor: "yellow.200",
+        label: "Pending",
+      };
+  }
+};
+
+
 /* ======================= Reusable Card ======================= */
 const Card = ({ children, ...props }) => (
   <Box
@@ -1048,7 +1086,7 @@ const selectGroup = (g) => {
 }
 
 /* ======================= Announcement Modal ======================= */
-function AnnouncementModal({ isOpen, onClose, announcement = null, onPosted }) {
+function AnnouncementModal({ isOpen, onClose, announcement = null, onPosted, events = [] }) {
   const [loading, setLoading] = React.useState(false);
   const [form, setForm] = React.useState({
     eventId: announcement?.eventId || "",
@@ -1056,32 +1094,108 @@ function AnnouncementModal({ isOpen, onClose, announcement = null, onPosted }) {
     content: announcement?.content || "",
   });
 
-  const onChange = (e) => setForm((s) => ({ ...s, [e.target.name]: e.target.value }));
+  // Event autosuggest state
+  const [eventQuery, setEventQuery] = React.useState("");
+  const [eventSuggestions, setEventSuggestions] = React.useState([]);
+  const [showEventSuggest, setShowEventSuggest] = React.useState(false);
 
-  const handleSubmit = async () => {
-    setLoading(true);
-    try {
-      await api("/api/organizer/announcements", {
-        method: "POST",
-        body: form,
-      });
-      toast.success("Announcement posted");
-      onClose();
-      onPosted?.();
-    } catch (e) {
-      toast.error(e?.message || "Failed to post announcement");
-    } finally {
-      setLoading(false);
+  // reset when opened / announcement changes
+  React.useEffect(() => {
+    if (!isOpen) return;
+    setForm({
+      eventId: announcement?.eventId || "",
+      title: announcement?.title || "",
+      content: announcement?.content || "",
+    });
+
+    if (announcement?.eventId && events.length) {
+      const ev = events.find((e) => String(e._id) === String(announcement.eventId));
+      setEventQuery(ev?.title || announcement.eventId || "");
+    } else {
+      setEventQuery("");
     }
+    setEventSuggestions([]);
+    setShowEventSuggest(false);
+  }, [isOpen, announcement, events]);
+
+  const onChange = (e) =>
+    setForm((s) => ({
+      ...s,
+      [e.target.name]: e.target.value,
+    }));
+
+  const onEventInputChange = (e) => {
+    const val = e.target.value;
+    setEventQuery(val);
+
+    if (!val.trim()) {
+      setShowEventSuggest(false);
+      setEventSuggestions([]);
+      setForm((s) => ({ ...s, eventId: "" }));
+      return;
+    }
+
+    const lc = val.toLowerCase();
+    const matches = events.filter((ev) =>
+      (ev.title || "").toLowerCase().includes(lc)
+    );
+    setEventSuggestions(matches.slice(0, 8));
+    setShowEventSuggest(matches.length > 0);
   };
+
+  const selectEvent = (ev) => {
+    setForm((s) => ({ ...s, eventId: ev._id }));
+    setEventQuery(ev.title || "");
+    setShowEventSuggest(false);
+  };
+
+const handleSubmit = async () => {
+  setLoading(true);
+  try {
+    if (!form.eventId) throw new Error("Please select an event.");
+    if (!eventQuery.trim()) throw new Error("Event title is required.");
+
+    if (!form.title.trim()) throw new Error("Announcement title is required.");
+    if (!form.content.trim()) throw new Error("Announcement content is required.");
+
+    await api("/api/organizer/announcements", {
+      method: "POST",
+      body: form,
+    });
+
+    toast.success("Announcement posted");
+    onClose();
+    onPosted?.();
+  } catch (err) {
+    toast.error(err?.message || "Failed to post announcement");
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (!isOpen) return null;
 
   return (
     <>
       <Box position="fixed" inset="0" bg="blackAlpha.600" zIndex="1000" onClick={onClose} />
-      <Box position="fixed" inset="0" zIndex="1001" display="flex" alignItems="center" justifyContent="center" p={{ base: 4, md: 6 }} onClick={onClose}>
-        <Box bg="white" rounded="2xl" maxW="640px" w="full" onClick={(e) => e.stopPropagation()} boxShadow="lg">
+      <Box
+        position="fixed"
+        inset="0"
+        zIndex="1001"
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        p={{ base: 4, md: 6 }}
+        onClick={onClose}
+      >
+        <Box
+          bg="white"
+          rounded="2xl"
+          maxW="640px"
+          w="full"
+          onClick={(e) => e.stopPropagation()}
+          boxShadow="lg"
+        >
           <Flex justify="space-between" align="center" p={{ base: 4, md: 6 }} borderBottomWidth="1px">
             <Heading size="md">Create Announcement</Heading>
             <Button variant="ghost" rounded="full" onClick={onClose} size="sm">
@@ -1090,17 +1204,69 @@ function AnnouncementModal({ isOpen, onClose, announcement = null, onPosted }) {
           </Flex>
 
           <VStack spacing={4} p={{ base: 4, md: 6 }} align="stretch">
+            {/* Event auto-suggest */}
             <Box>
               <Text fontSize="sm" fontWeight="medium" mb={2}>
-                Related Event ID
+                Related Event
               </Text>
-              <Input
-                name="eventId"
-                value={form.eventId}
-                onChange={onChange}
-                placeholder="Paste an event ID (optional)"
-                rounded="lg"
-              />
+              <Box position="relative">
+                <Input
+                  value={eventQuery}
+                  onChange={onEventInputChange}
+                  onBlur={() => setTimeout(() => setShowEventSuggest(false), 120)}
+                  placeholder="Start typing to select one of your events."
+                  rounded="lg"
+                  aria-autocomplete="list"
+                  aria-expanded={showEventSuggest}
+                  aria-controls="announcement-event-suggest"
+                />
+                {showEventSuggest && eventSuggestions.length > 0 && (
+                  <Box
+                    id="announcement-event-suggest"
+                    position="absolute"
+                    top="100%"
+                    left="0"
+                    right="0"
+                    mt={1}
+                    bg="white"
+                    borderWidth="1px"
+                    borderColor="gray.200"
+                    rounded="md"
+                    shadow="md"
+                    zIndex={20}
+                    maxH="260px"
+                    overflowY="auto"
+                  >
+                    {eventSuggestions.map((ev) => (
+                      <Flex
+                        key={ev._id}
+                        align="center"
+                        justify="space-between"
+                        px={3}
+                        py={2}
+                        cursor="pointer"
+                        _hover={{ bg: "pink.50" }}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => selectEvent(ev)}
+                      >
+                        <Box>
+                          <Text fontWeight="medium">{ev.title}</Text>
+                          <Text fontSize="xs" color="gray.600">
+                            {ev.group || ev.category || "Event"} •{" "}
+                            {ev.startAt ? new Date(ev.startAt).toLocaleDateString() : ""}
+                          </Text>
+                        </Box>
+                        <Badge variant="subtle">Select</Badge>
+                      </Flex>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+              {form.eventId && (
+                <Text fontSize="xs" color="gray.500" mt={1}>
+                  Event ID: {form.eventId}
+                </Text>
+              )}
             </Box>
 
             <Box>
@@ -1259,12 +1425,54 @@ const loadAnnouncements = React.useCallback(async () => {
   const filteredAttendees = attendees.filter((a) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
+
+    const name = (
+      a?.name ||
+      a?.userName ||
+      a?.user?.name ||
+      ""
+    ).toLowerCase();
+
+    const email = (
+      a?.email ||
+      a?.userEmail ||
+      a?.user?.email ||
+      ""
+    ).toLowerCase();
+
+    const eventTitle = (
+      a?.eventTitle ||
+      a?.event?.title ||
+      events.find((e) => String(e._id) === String(a.eventId))?.title ||
+      ""
+    ).toLowerCase();
+
     return (
-      a?.name?.toLowerCase().includes(q) ||
-      a?.email?.toLowerCase().includes(q) ||
-      a?.eventTitle?.toLowerCase().includes(q)
+      name.includes(q) ||
+      email.includes(q) ||
+      eventTitle.includes(q)
     );
   });
+
+
+    // === Derived analytics: attendee counts per event (live truth based on events state) ===
+  const eventsWithCounts = events.map((e) => {
+    const count =
+      typeof e.attendeesCount === "number"
+        ? e.attendeesCount
+        : Array.isArray(e.attendees)
+        ? e.attendees.length
+        : 0;
+
+    return { ...e, _popCount: count };
+  });
+
+  const popularEvents = [...eventsWithCounts].sort(
+    (a, b) => b._popCount - a._popCount
+  );
+  const topPopular = popularEvents.slice(0, 3);
+  const maxPopCount = topPopular[0]?._popCount || 1;
+
 
   if (!isLoaded) {
     return (
@@ -1414,21 +1622,27 @@ const loadAnnouncements = React.useCallback(async () => {
                       {typeof ev.attendeesCount === "number" ? ev.attendeesCount : ev.attendees?.length || 0}
                     </Text>
 
-                    <Badge
-                      colorScheme={
-                        ev.status === "approved"
-                          ? "green"
-                          : ev.status === "rejected"
-                          ? "red"
-                          : "yellow"
-                      }
-                      rounded="full"
-                      px={3}
-                      py={1}
-                      w="fit-content"
-                    >
-                      {ev.status || "pending"}
-                    </Badge>
+                    {(() => {
+                      const s = getStatusStyles(ev.status);
+                      return (
+                        <Box
+                          as="span"
+                          px={3}
+                          py={1}
+                          borderRadius="full"
+                          fontSize="xs"
+                          fontWeight="semibold"
+                          bg={s.bg}
+                          color={s.color}
+                          borderWidth="1px"
+                          borderColor={s.borderColor}
+                          textTransform="capitalize"
+                        >
+                          {s.label}
+                        </Box>
+                      );
+                    })()}
+
 
                     <HStack spacing={2}>
                       <Button
@@ -1557,8 +1771,11 @@ const loadAnnouncements = React.useCallback(async () => {
 
                     <Text fontSize="sm">{a.eventTitle || events.find((e) => e._id === a.eventId)?.title}</Text>
                     <Text fontSize="sm">
-                      {a.rsvpAt ? new Date(a.rsvpAt).toLocaleDateString() : "-"}
+                      {a.rsvpedAt || a.rsvpAt || a.createdAt
+                        ? new Date(a.rsvpedAt || a.rsvpAt || a.createdAt).toLocaleDateString()
+                        : "-"}
                     </Text>
+
 
                     <Badge
                       colorScheme={
@@ -1669,8 +1886,11 @@ const loadAnnouncements = React.useCallback(async () => {
                 Event Popularity
               </Heading>
               <Flex gap={4} h="260px" align="flex-end">
-                {events.slice(0, 3).map((e, i) => {
-                  const h = Math.min(90, 30 + (e.attendeesCount || e.attendees?.length || 0));
+                {topPopular.map((e, i) => {
+                  // 20–90% height based strictly on relative attendee count
+                  const ratio = e._popCount / maxPopCount;
+                  const h = 20 + ratio * 70;
+
                   return (
                     <Box
                       key={e._id}
@@ -1679,17 +1899,28 @@ const loadAnnouncements = React.useCallback(async () => {
                       rounded="xl"
                       h={`${h}%`}
                       display="flex"
-                      alignItems="flex-end"
-                      justifyContent="center"
+                      flexDir="column"
+                      alignItems="center"
+                      justifyContent="flex-end"
                       pb={3}
                     >
-                      <Text color="white" fontSize="sm" textAlign="center" px={2}>
+                      <Text color="white" fontSize="xs" mb={1}>
+                        {e._popCount} RSVP{e._popCount === 1 ? "" : "s"}
+                      </Text>
+                      <Text color="white" fontSize="sm" textAlign="center" px={2} noOfLines={2}>
                         {e.title}
                       </Text>
                     </Box>
                   );
                 })}
+                {topPopular.length === 0 && (
+                  <Box w="full" textAlign="center" color="gray.500" py={10}>
+                    No RSVP data yet.
+                  </Box>
+                )}
               </Flex>
+
+
             </Card>
           </VStack>
         )}
@@ -1708,8 +1939,9 @@ const loadAnnouncements = React.useCallback(async () => {
             toast.success("Announcement posted");
             await loadAnnouncements();
           }}
-
+          events={events}
         />
+
         <CreateGroupModal
           isOpen={createGroupOpen}
           onClose={() => setCreateGroupOpen(false)}

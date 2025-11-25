@@ -52,6 +52,97 @@ const hasUserJoined = (g, clerkUserId) => {
   return ids.includes(clerkUserId);
 };
 
+const extractEventsFromResponse = (res) => {
+  if (!res) return [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res.events)) return res.events;
+  if (Array.isArray(res.data)) return res.data;
+  if (Array.isArray(res.results)) return res.results;
+  return [];
+};
+
+const normalizeEventsResponse = (res) => {
+  if (!res) return [];
+  // plain array
+  if (Array.isArray(res)) return res;
+  // common API wrappers
+  if (Array.isArray(res.events)) return res.events;
+  if (Array.isArray(res.data)) return res.data;
+  if (Array.isArray(res.results)) return res.results;
+  return [];
+};
+
+const eventMatchesGroup = (event, group) => {
+  if (!event || !group) return false;
+
+  const groupId = group._id || group.id;
+  const groupName = (group.name || '').toLowerCase();
+  const groupKey = (normalizeEventGroupMatch(group) || '').toLowerCase();
+
+  // Try to derive event's group id in various shapes
+  let evGroupId =
+    event.groupId ||
+    event.group_id ||
+    (typeof event.group === 'string' ? event.group : null);
+
+  if (!evGroupId && event.group && typeof event.group === 'object') {
+    evGroupId = event.group._id || event.group.id;
+  }
+
+  const evGroupName = (
+    event.groupName ||
+    event.group_name ||
+    (event.group && event.group.name) ||
+    ''
+  ).toLowerCase();
+
+  const evCategory = (
+    event.category ||
+    event.groupCategory ||
+    ''
+  ).toLowerCase();
+
+  // 1. Prefer strict ID match
+  if (groupId && evGroupId && String(evGroupId) === String(groupId)) return true;
+
+  // 2. Fallback: group name match
+  if (groupName && evGroupName && evGroupName === groupName) return true;
+
+  // 3. Last resort: category / key match
+  if (groupKey && evCategory && evCategory === groupKey) return true;
+
+  return false;
+};
+
+
+
+const getEventDate = (evt) => {
+  return new Date(
+    evt.startAt ||
+    evt.date ||
+    evt.startDate ||
+    evt.start_time ||
+    evt.start_time_utc ||
+    evt.createdAt ||
+    evt.created_at ||
+    Date.now()
+  );
+};
+
+const filterAndSortUpcoming = (events) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return events
+    .filter((e) => {
+      const d = getEventDate(e);
+      if (Number.isNaN(d.getTime())) return true; // keep if no valid date
+      return d >= today;
+    })
+    .sort((a, b) => getEventDate(a) - getEventDate(b));
+};
+
+
 const normalizeEventGroupMatch = (g) => g?.name || g?.title || g?.category || '';
 
 const GroupDetails = () => {
@@ -104,37 +195,60 @@ const GroupDetails = () => {
     };
   }, [id, navigate]);
 
-  // ----- Load events for this group -----
-  useEffect(() => {
-    let mounted = true;
+// ----- Load events for this group -----
+useEffect(() => {
+  let ignore = false;
 
-    const loadEvents = async () => {
-      if (!group) return;
-      try {
-        const server =
-          (await api(`/api/groups/${group._id}/events`).catch(() => null)) ||
-          (await api(
-            `/api/events?groupId=${encodeURIComponent(
-              group._id
-            )}&group=${encodeURIComponent(group.name || '')}`
-          ).catch(() => null));
+  const loadEvents = async () => {
+    if (!group) return;
 
-        if (mounted && Array.isArray(server) && server.length) {
-          setEvents(server);
-          return;
-        }
-      } catch {}
-      if (mounted) {
-        const key = normalizeEventGroupMatch(group);
-        const d = dummyEventsData
-          .filter((e) => e.category === key)
-          .sort((a, b) => new Date(a.date) - new Date(b.date));
-        setEvents(d);
+    try {
+      // 1. Try group-specific endpoint
+      const res1 = await api(`/api/groups/${group._id}/events`).catch(() => null);
+      let eventsFromServer = normalizeEventsResponse(res1);
+
+      // 2. Fallback: generic events endpoint with query params
+      if (!eventsFromServer.length) {
+        const res2 = await api(
+          `/api/events?groupId=${encodeURIComponent(
+            group._id
+          )}&group=${encodeURIComponent(group.name || '')}`
+        ).catch(() => null);
+
+        eventsFromServer = normalizeEventsResponse(res2);
       }
-    };
 
-    loadEvents();
-  }, [group]);
+      // 3. Filter to only events belonging to this group
+      const filteredServerEvents = (eventsFromServer || []).filter((ev) =>
+        eventMatchesGroup(ev, group)
+      );
+
+      if (!ignore && filteredServerEvents.length) {
+        setEvents(filteredServerEvents);
+        return;
+      }
+    } catch (err) {
+      console.error('Failed to load events for group', err);
+    }
+
+    // 4. Fallback to dummy events if server gave nothing useful
+    if (!ignore) {
+      const dummy = (dummyEventsData || [])
+        .filter((ev) => eventMatchesGroup(ev, group))
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      setEvents(dummy);
+    }
+  };
+
+  loadEvents();
+
+  return () => {
+    ignore = true;
+  };
+}, [group]);
+
+
 
   if (loading) return null;
   if (!group) return null;

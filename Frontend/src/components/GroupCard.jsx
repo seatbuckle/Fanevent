@@ -109,9 +109,18 @@ const GroupCard = ({ group = {} }) => {
           </Text>
         )}
 
-        <Text fontSize="md" fontWeight="semibold" mb={2} noOfLines={1}>
+        <Text
+          fontSize="md"
+          fontWeight="semibold"
+          mb={2}
+          noOfLines={1}
+          overflow="hidden"
+          textOverflow="ellipsis"
+          whiteSpace="nowrap"
+        >
           {group.name || 'Group'}
         </Text>
+
 
         <Text fontSize="xs" color="gray.600" mb={3} noOfLines={2} lineHeight="1.5">
           {group.description || 'No description provided.'}

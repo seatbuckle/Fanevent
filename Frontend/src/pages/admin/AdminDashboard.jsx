@@ -48,6 +48,20 @@ const statusColor = (status) => {
   return "#E5E7EB"; // light gray fallback
 };
 
+const mapStatusToColor = (status = "") => {
+  const s = status.toString().toLowerCase();
+
+  if (s.includes("operational") || s === "ok" || s === "healthy")
+    return "green";
+  if (s.includes("degraded") || s.includes("partial"))
+    return "yellow";
+  if (s.includes("down") || s.includes("outage") || s.includes("error"))
+    return "red";
+
+  return "gray";
+};
+
+
 const reportStatusColor = (status) => {
   const s = (status || "").toLowerCase();
 
@@ -201,17 +215,24 @@ export default function AdminDashboard() {
   });
 
   // System status & activity (now dynamic)
-  const [systemStatus, setSystemStatus] = React.useState([
-    { label: "Website", key: "web", status: "Operational", color: "green" },
-    { label: "API", key: "api", status: "Operational", color: "green" },
-    { label: "Database", key: "db", status: "Operational", color: "green" },
-    {
-      label: "Notification Service",
-      key: "notify",
-      status: "Operational",
-      color: "green",
-    },
-  ]);
+const [systemStatus, setSystemStatus] = React.useState([
+  { label: "Website", key: "web", status: "Unknown", color: "gray" },
+  { label: "API", key: "api", status: "Unknown", color: "gray" },
+  { label: "Database", key: "db", status: "Unknown", color: "gray" },
+  {
+    label: "Notification Service",
+    key: "notify",
+    status: "Unknown",
+    color: "gray",
+  },
+  {
+    label: "Inngest Workers",
+    key: "inngest",
+    status: "Unknown",
+    color: "gray",
+  },
+]);
+
 
   const [activity, setActivity] = React.useState([]);
 
@@ -415,54 +436,138 @@ export default function AdminDashboard() {
     loadRecentActivity();
   }, [isLoaded, activeTab]);
 
-  // ---- System Status ----
-  const loadSystemStatus = async () => {
-    const HAS_CONSOLIDATED_ENDPOINT = false;
+// ---- System Status ----
+const loadSystemStatus = async () => {
+  // Fallback in case everything fails
+  const setDefault = () =>
+    setSystemStatus([
+      { label: "Website", key: "web", status: "Unknown", color: "gray" },
+      { label: "API", key: "api", status: "Unknown", color: "gray" },
+      { label: "Database", key: "db", status: "Unknown", color: "gray" },
+      {
+        label: "Notification Service",
+        key: "notify",
+        status: "Unknown",
+        color: "gray",
+      },
+      {
+        label: "Inngest Workers",
+        key: "inngest",
+        status: "Unknown",
+        color: "gray",
+      },
+    ]);
 
-    const setDefault = () =>
-      setSystemStatus([
-        { label: "Website", key: "web", status: "Operational", color: "green" },
-        { label: "API", key: "api", status: "Unknown", color: "gray" },
-        { label: "Database", key: "db", status: "Unknown", color: "gray" },
-        {
-          label: "Notification Service",
-          key: "notify",
-          status: "Unknown",
-          color: "gray",
-        },
-      ]);
+  try {
+    // 1. Try consolidated system status if you build it on the backend
+    const consolidated = await api("/api/admin/system-status").catch(
+      () => null
+    );
 
-    try {
-      if (!HAS_CONSOLIDATED_ENDPOINT) {
-        setDefault();
-        return;
-      }
+    if (consolidated && Array.isArray(consolidated.services)) {
+      setSystemStatus(
+        consolidated.services.map((svc) => {
+          const rawStatus =
+            svc.status ??
+            (svc.healthy === true ? "Operational" : "Down") ??
+            "Unknown";
 
-      const res = await api("/api/admin/system-status").catch(() => null);
-      if (res && Array.isArray(res.services)) {
-        const toColor = (s = "") => {
-          const v = String(s).toLowerCase();
-          if (v.includes("operational")) return "green";
-          if (v.includes("outage") || v.includes("degraded")) return "yellow";
-          if (v.includes("down") || v.includes("error")) return "red";
-          return "gray";
-        };
-        setSystemStatus(
-          res.services.map((s) => ({
-            label: s.label || s.key,
-            key: s.key,
-            status: s.status || "Unknown",
-            color: toColor(s.status),
-          }))
-        );
-      } else {
-        setDefault();
-      }
-    } catch (e) {
-      console.error(e);
-      setDefault();
+          return {
+            label: svc.label || svc.key,
+            key: svc.key,
+            status: rawStatus,
+            color: mapStatusToColor(rawStatus),
+          };
+        })
+      );
+      return;
     }
-  };
+
+    // 2. Fallback: individual lightweight health checks
+    const [webRes, apiRes, dbRes, notifyRes, inngestRes] = await Promise.all([
+      // Basic check to see if the frontend can talk to *anything*.
+      api("/api/health/web").catch(() => null),
+      api("/api/health").catch(() => null),
+      api("/api/admin/health/db").catch(() => null),
+      api("/api/admin/health/notifications").catch(() => null),
+
+      // Inngest: you can expose something like
+      // GET /api/admin/inngest/status -> { healthy: true, failingFunctions: [] }
+      api("/api/admin/inngest/status").catch(() => null),
+    ]);
+
+    const interpret = (res, { defaultStatus = "Unknown" } = {}) => {
+      if (!res) return { status: defaultStatus, color: "red" };
+
+      // Try a few likely shapes: { healthy: true }, { status: "operational" }, etc.
+      const status =
+        res.status ||
+        (res.healthy === true ? "Operational" : null) ||
+        (res.ok === true ? "Operational" : null) ||
+        defaultStatus;
+
+      return { status, color: mapStatusToColor(status) };
+    };
+
+    // Website – front-end reachability (webRes optional)
+    const webStatus = interpret(webRes, { defaultStatus: "Operational" });
+
+    // API core health
+    const apiStatus = interpret(apiRes, { defaultStatus: "Unknown" });
+
+    // DB health
+    const dbStatus = interpret(dbRes, { defaultStatus: "Unknown" });
+
+    // Notifications (email/push/etc.)
+    const notifyStatus = interpret(notifyRes, { defaultStatus: "Unknown" });
+
+    // Inngest – treat any failing functions as "Degraded"
+    let inngestStatus;
+    if (!inngestRes) {
+      inngestStatus = { status: "Down", color: "red" };
+    } else {
+      const failingCount =
+        Array.isArray(inngestRes.failingFunctions)
+          ? inngestRes.failingFunctions.length
+          : Number(inngestRes.failingCount || 0);
+
+      if (inngestRes.healthy === true && failingCount === 0) {
+        inngestStatus = {
+          status: "Operational",
+          color: mapStatusToColor("operational"),
+        };
+      } else if (failingCount > 0) {
+        inngestStatus = {
+          status: `Degraded (${failingCount} failing)`,
+          color: mapStatusToColor("degraded"),
+        };
+      } else {
+        const st = inngestRes.status || "Unknown";
+        inngestStatus = { status: st, color: mapStatusToColor(st) };
+      }
+    }
+
+    setSystemStatus([
+      { label: "Website", key: "web", ...webStatus },
+      { label: "API", key: "api", ...apiStatus },
+      { label: "Database", key: "db", ...dbStatus },
+      {
+        label: "Notification Service",
+        key: "notify",
+        ...notifyStatus,
+      },
+      {
+        label: "Inngest Workers",
+        key: "inngest",
+        ...inngestStatus,
+      },
+    ]);
+  } catch (e) {
+    console.error(e);
+    setDefault();
+  }
+};
+
 
   // ---- Recent Activity ----
   const loadRecentActivity = async () => {
@@ -1579,7 +1684,7 @@ const notifyEventUpdated = async (eventId, title, attendeeIds = []) => {
                       fontWeight="semibold"
                       color={`${item.color}.600`}
                     >
-                      {item.status}
+                      {String(item.status).charAt(0).toUpperCase() + String(item.status).slice(1)}
                     </Text>
                   </Flex>
                 ))}

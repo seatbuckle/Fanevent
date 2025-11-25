@@ -228,6 +228,35 @@ function shapeNotification(n) {
     };
   }
 
+    // Announcements (sent to RSVP'd users)
+  if (typeStr.includes("announcement")) {
+    const organizerName = data?.organizerName;
+    const organizerId = data?.organizerId;
+    const fromLabel =
+      organizerName || (organizerId ? `@${organizerId}` : null);
+
+    return {
+      ...common,
+      icon: <Info size={18} />,
+      color: "blue",
+      title: `New Announcement${
+        eventTitle
+          ? ` · ${eventTitle}`
+          : data?.title
+          ? ` · ${data.title}`
+          : ""
+      }`,
+      body:
+        common.body ||
+        data?.message ||
+        data?.content ||
+        (fromLabel
+          ? `You have a new announcement from ${fromLabel}.`
+          : "You have a new announcement from an organizer."),
+    };
+  }
+
+
   // Organizer application
   if (
     typeStr.includes("organizer") &&
@@ -742,6 +771,13 @@ export default function NotificationOverlay({ isOpen, onClose }) {
                             {shaped.body}
                           </Text>
                         )}
+
+                        {shaped.rawData?.organizerName && (
+                          <Text mt={1} fontSize="xs" color="gray.600">
+                            From: {shaped.rawData.organizerName}
+                          </Text>
+                        )}
+
 
                         <HStack mt={2} spacing={2} flexWrap="wrap">
                           {hasNav && (

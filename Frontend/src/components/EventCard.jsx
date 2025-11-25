@@ -117,9 +117,17 @@ const EventCard = ({ event = {} }) => {
           </Text>
         )}
 
-        <Text fontSize="md" fontWeight="semibold" mb={2.5} noOfLines={1}>
-          {event.title || 'Untitled Event'}
-        </Text>
+      <Text
+        fontSize="md"
+        fontWeight="semibold"
+        mb={2.5}
+        noOfLines={1}
+        overflow="hidden"
+        textOverflow="ellipsis"
+        whiteSpace="nowrap"
+      >
+        {event.title || 'Untitled Event'}
+      </Text>
 
         <Flex align="center" gap={1} mb={1.5} color="gray.600" fontSize="xs">
           <Calendar size={14} />
