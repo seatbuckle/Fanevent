@@ -86,6 +86,15 @@ const formatMembers = (n) => {
   }
 };
 
+const toDateKey = (date) => {
+  if (!(date instanceof Date) || isNaN(date)) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+
 /* ======================= Card ======================= */
 const Card = ({ children, ...props }) => (
   <Box bg="white" borderWidth="1px" borderColor="gray.200" borderRadius="xl" p={6} {...props}>
@@ -93,61 +102,447 @@ const Card = ({ children, ...props }) => (
   </Box>
 );
 
-/* ======================= Calendar (UI only) ======================= */
-const Calendar = () => {
-  const [currentMonth] = React.useState("May 2023");
+/* ======================= Calendar (Live, RSVP-aware, Modern, Filterable) ======================= */
+const Calendar = ({ rsvps }) => {
+  const navigate = useNavigate();
+
+  const [currentMonth, setCurrentMonth] = React.useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
+  const [selectedDateKey, setSelectedDateKey] = React.useState(null);
+
   const days = ["S", "M", "T", "W", "T", "F", "S"];
-  const dates = [
-    [30, 1, 2, 3, 4, 5, 6],
-    [7, 8, 9, 10, 11, 12, 13],
-    [14, 15, 16, 17, 18, 19, 20],
-    [21, 22, 23, 24, 25, 26, 27],
-    [28, 29, 30, 31, null, null, null],
-  ];
+
+  const todayKey = React.useMemo(() => toDateKey(new Date()), []);
+
+  const todayStart = React.useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  // Normalize RSVPs -> [{ row, ev, date, key }]
+  const parsedEvents = React.useMemo(() => {
+    return (rsvps || [])
+      .map((row) => {
+        const ev = unwrapEvent(row);
+        const when = ev?.startAt || ev?.date;
+        if (!when) return null;
+        const d = new Date(when);
+        if (isNaN(d)) return null;
+        return {
+          row,
+          ev,
+          date: d,
+          key: toDateKey(d),
+        };
+      })
+      .filter(Boolean);
+  }, [rsvps]);
+
+  // Map YYYY-MM-DD -> count of events
+  const eventsByDay = React.useMemo(() => {
+    const map = {};
+    parsedEvents.forEach((e) => {
+      if (!e.key) return;
+      map[e.key] = (map[e.key] || 0) + 1;
+    });
+    return map;
+  }, [parsedEvents]);
+
+  // Upcoming events (default view)
+  const upcomingEvents = React.useMemo(() => {
+    return parsedEvents
+      .filter((e) => e.date >= todayStart)
+      .sort((a, b) => a.date - b.date);
+  }, [parsedEvents, todayStart]);
+
+  // Events for selected day, if any
+  const dayEvents = React.useMemo(() => {
+    if (!selectedDateKey) return [];
+    return parsedEvents
+      .filter((e) => e.key === selectedDateKey)
+      .sort((a, b) => a.date - b.date);
+  }, [parsedEvents, selectedDateKey]);
+
+  const eventsToShow = selectedDateKey ? dayEvents : upcomingEvents;
+
+  const monthLabel = React.useMemo(
+    () =>
+      currentMonth.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      }),
+    [currentMonth]
+  );
+
+  const selectedDateObj = React.useMemo(() => {
+    if (!selectedDateKey) return null;
+    const [y, m, d] = selectedDateKey.split("-").map(Number);
+    if (!y || !m || !d) return null;
+    return new Date(y, m - 1, d);
+  }, [selectedDateKey]);
+
+  const weeks = React.useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstOfMonth = new Date(year, month, 1);
+    const firstDay = firstOfMonth.getDay(); // 0-6, Sun-Sat
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+    const cells = [];
+    for (let i = 0; i < totalCells; i++) {
+      const date = new Date(year, month, i - firstDay + 1);
+      cells.push(date);
+    }
+
+    const result = [];
+    for (let i = 0; i < cells.length; i += 7) {
+      result.push(cells.slice(i, i + 7));
+    }
+    return result;
+  }, [currentMonth]);
+
+  const goMonth = (delta) => {
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+  };
+
+  const goToday = () => {
+    const now = new Date();
+    setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    setSelectedDateKey(toDateKey(now));
+  };
+
+  const resetCalendar = () => {
+    const now = new Date();
+    setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    setSelectedDateKey(null);
+  };
+
+  const onDayClick = (date) => {
+    const key = toDateKey(date);
+    if (!key) return;
+    setSelectedDateKey((prev) => (prev === key ? null : key));
+  };
+
+  const now = new Date();
+  const isDefaultMonth =
+    currentMonth.getFullYear() === now.getFullYear() &&
+    currentMonth.getMonth() === now.getMonth();
+
+  const eventsHeading =
+    selectedDateKey && selectedDateObj
+      ? `Events on ${formatDate(selectedDateObj.toISOString())}`
+      : "All Upcoming Events";
 
   return (
-    <Card>
-      <HStack justify="space-between" mb={4}>
-        <HStack>
-          <Box color="pink.500" fontSize="xl">📅</Box>
-          <Heading size="md">Your Calendar</Heading>
+    <Card
+      bgGradient="linear(to-br, pink.50, white)"
+      borderColor="pink.100"
+      boxShadow="md"
+    >
+      {/* Header */}
+      <Flex justify="space-between" align="center" mb={4} gap={4} flexWrap="wrap">
+        <HStack spacing={3}>
+          <Box
+            bg="white"
+            borderRadius="full"
+            w="40px"
+            h="40px"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            boxShadow="sm"
+          >
+            <Text fontSize="xl">📅</Text>
+          </Box>
+          <Box>
+            <Heading size="md">Your Calendar</Heading>
+            <Text fontSize="xs" color="gray.500">
+              Click a date to see events on that day
+            </Text>
+          </Box>
         </HStack>
-        <HStack>
-          <IconButton size="sm" variant="ghost" aria-label="Prev month" icon={<span>←</span>} />
-          <Text fontWeight="medium">{currentMonth}</Text>
-          <IconButton size="sm" variant="ghost" aria-label="Next month" icon={<span>→</span>} />
+
+        <HStack spacing={3}>
+          <HStack
+            spacing={2}
+            px={3}
+            py={1}
+            borderRadius="full"
+            bg="whiteAlpha.800"
+            borderWidth="1px"
+            borderColor="gray.100"
+          >
+            <IconButton
+              size="xs"
+              variant="ghost"
+              colorScheme="pink"
+              aria-label="Previous month"
+              onClick={() => goMonth(-1)}
+              icon={<span>←</span>}
+            />
+            <Text fontSize="sm" fontWeight="medium">
+              {monthLabel}
+            </Text>
+            <IconButton
+              size="xs"
+              variant="ghost"
+              colorScheme="pink"
+              aria-label="Next month"
+              onClick={() => goMonth(1)}
+              icon={<span>→</span>}
+            />
+          </HStack>
+
+          <Button
+            size="xs"
+            variant="outline"
+            borderRadius="full"
+            onClick={goToday}
+            colorScheme="pink"
+          >
+            Today
+          </Button>
+
+          <Button
+            size="xs"
+            variant="ghost"
+            borderRadius="full"
+            onClick={resetCalendar}
+            colorScheme="pink"
+            isDisabled={isDefaultMonth && !selectedDateKey}
+          >
+            Reset Calendar
+          </Button>
+        </HStack>
+      </Flex>
+
+      {/* Legend */}
+      <HStack spacing={4} mb={3} fontSize="xs" color="gray.500">
+        <HStack spacing={1}>
+          <Box w="7px" h="7px" borderRadius="full" bg="pink.400" />
+          <Text>RSVP&apos;d day</Text>
+        </HStack>
+        <HStack spacing={1}>
+          <Box
+            w="14px"
+            h="14px"
+            borderRadius="md"
+            borderWidth="2px"
+            borderColor="pink.500"
+          />
+          <Text>Today</Text>
+        </HStack>
+        <HStack spacing={1}>
+          <Box
+            w="14px"
+            h="14px"
+            borderRadius="md"
+            bg="pink.50"
+            borderWidth="1px"
+            borderColor="pink.300"
+          />
+          <Text>Selected</Text>
         </HStack>
       </HStack>
 
-      <Grid templateColumns="repeat(7, 1fr)" gap={2} mb={4}>
-        {days.map((day, i) => (
-          <Flex key={i} justify="center" align="center" fontSize="sm" fontWeight="medium" color="gray.600">
-            {day}
+      {/* Day names */}
+      <Grid templateColumns="repeat(7, 1fr)" gap={2} mb={2}>
+        {days.map((day) => (
+          <Flex
+            key={day}
+            justify="center"
+            align="center"
+            fontSize="xs"
+            fontWeight="semibold"
+            color="gray.600"
+          >
+            <Box
+              px={2}
+              py={1}
+              borderRadius="full"
+              bg="whiteAlpha.900"
+              borderWidth="1px"
+              borderColor="gray.100"
+              minW="28px"
+              textAlign="center"
+            >
+              {day}
+            </Box>
           </Flex>
         ))}
       </Grid>
 
-      <Grid templateColumns="repeat(7, 1fr)" gap={2}>
-        {dates.flat().map((date, i) => (
-          <Flex
-            key={i}
-            justify="center"
-            align="center"
-            h="40px"
-            borderRadius="lg"
-            bg={date === 6 ? "pink.500" : "transparent"}
-            color={date === 6 ? "white" : date === 30 ? "gray.400" : "gray.800"}
-            fontWeight={date === 6 ? "bold" : "normal"}
-            cursor="pointer"
-            _hover={{ bg: date === 6 ? "pink.600" : "gray.50" }}
-          >
-            {date}
-          </Flex>
+      {/* Dates */}
+      <VStack spacing={1} align="stretch">
+        {weeks.map((week, wi) => (
+          <Grid key={wi} templateColumns="repeat(7, 1fr)" gap={2}>
+            {week.map((date) => {
+              const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+              const key = toDateKey(date);
+              const hasEvents = !!eventsByDay[key];
+              const isToday = key === todayKey;
+              const isSelected = selectedDateKey === key;
+
+              const baseColor = isCurrentMonth ? "gray.800" : "gray.400";
+
+              return (
+                <Box
+                  key={key || date.getTime()}
+                  position="relative"
+                  borderRadius="xl"
+                  bg={
+                    isSelected
+                      ? "pink.50"
+                      : "whiteAlpha.900"
+                  }
+                  borderWidth={isToday ? "2px" : "1px"}
+                  borderColor={
+                    isToday
+                      ? "pink.500"
+                      : isSelected
+                      ? "pink.300"
+                      : hasEvents
+                      ? "pink.200"
+                      : "gray.100"
+                  }
+                  boxShadow={isToday || isSelected ? "sm" : "none"}
+                  _hover={{
+                    boxShadow: "sm",
+                    transform: "translateY(-1px)",
+                    transition: "all 0.12s ease-out",
+                  }}
+                  minH="64px"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  cursor="pointer"
+                  onClick={() => onDayClick(date)}
+                >
+                  <VStack spacing={1}>
+                    <Text
+                      fontSize="sm"
+                      fontWeight={hasEvents || isToday || isSelected ? "bold" : "medium"}
+                      color={baseColor}
+                    >
+                      {date.getDate()}
+                    </Text>
+
+                    {hasEvents && (
+                      <HStack spacing={1} align="center">
+                        <Box
+                          w="7px"
+                          h="7px"
+                          borderRadius="full"
+                          bg={isToday ? "pink.100" : "pink.400"}
+                        />
+                        {eventsByDay[key] > 1 && (
+                          <Text fontSize="xs" color="gray.500">
+                            {eventsByDay[key]}
+                          </Text>
+                        )}
+                      </HStack>
+                    )}
+                  </VStack>
+
+                  {isToday && (
+                    <Badge
+                      position="absolute"
+                      top="6px"
+                      right="6px"
+                      borderRadius="full"
+                      colorScheme="pink"
+                      variant="subtle"
+                      fontSize="0.6rem"
+                      px={2}
+                    >
+                      Today
+                    </Badge>
+                  )}
+                </Box>
+              );
+            })}
+          </Grid>
         ))}
-      </Grid>
+      </VStack>
+
+      {/* Events list below calendar */}
+      <Box mt={6} pt={4} borderTopWidth="1px" borderColor="gray.100">
+        <Flex justify="space-between" align="center" mb={3} flexWrap="wrap" gap={2}>
+          <Heading size="sm">{eventsHeading}</Heading>
+          {selectedDateKey && (
+            <Button
+              size="xs"
+              variant="ghost"
+              colorScheme="pink"
+              onClick={() => setSelectedDateKey(null)}
+            >
+              Clear day filter
+            </Button>
+          )}
+        </Flex>
+
+        {eventsToShow.length ? (
+          <VStack spacing={4} align="stretch">
+            {eventsToShow.map(({ ev, date, key }) => (
+              <Flex
+                key={ev._id || key}
+                align="center"
+                gap={4}
+                p={3}
+                borderWidth="1px"
+                borderRadius="lg"
+                bg="white"
+                flexWrap="wrap"
+              >
+                <Image
+                  src={ev.image || "/placeholder.png"}
+                  w="72px"
+                  h="72px"
+                  borderRadius="lg"
+                  objectFit="cover"
+                  flexShrink={0}
+                />
+                <Box flex="1" minW="200px">
+                  <Text fontWeight="semibold" fontSize="md">
+                    {ev.title || "Event"}
+                  </Text>
+                  <Text fontSize="sm" color="gray.600">
+                    {formatDate(date.toISOString())}
+                  </Text>
+                  <Text fontSize="sm" color="gray.500">
+                    {ev.category || ev.group}
+                  </Text>
+                </Box>
+                {ev._id && (
+                  <Button
+                    variant="outline"
+                    colorScheme="pink"
+                    size="sm"
+                    onClick={() => navigate(`/events/${ev._id}`)}
+                  >
+                    Details
+                  </Button>
+                )}
+              </Flex>
+            ))}
+          </VStack>
+        ) : (
+          <Text fontSize="sm" color="gray.500">
+            {selectedDateKey
+              ? "No events on this day."
+              : "No upcoming events yet."}
+          </Text>
+        )}
+      </Box>
     </Card>
   );
 };
+
 
 /* ======================= Apply Organizer Modal (with Autosuggest) ======================= */
 function ApplyOrganizerModal({ isOpen, onClose, onSubmitted }) {
@@ -617,37 +1012,11 @@ React.useEffect(() => {
 
       {/* Tab Content */}
       {activeTab === "calendar" && (
-        <VStack spacing={6} align="stretch">
-          <Calendar />
-          <Card>
-            <Heading size="md" mb={4}>Upcoming Events</Heading>
-            <VStack spacing={4} align="stretch">
-              {rsvps.map((row) => {
-                const ev = unwrapEvent(row);
-                return (
-                  <Flex key={ev._id || Math.random()} align="center" gap={4} p={4} borderWidth="1px" borderRadius="lg" flexWrap="wrap">
-                    <Box bg="pink.50" px={3} py={2} borderRadius="lg" textAlign="center" minW="50px">
-                      <Text fontSize="xs" color="pink.500" fontWeight="bold">
-                        {getMonthAbbr(ev.startAt || ev.date)}
-                      </Text>
-                    </Box>
-                    <Box flex="1" minW="200px">
-                      <Text fontWeight="semibold">{ev.title || "Event"}</Text>
-                      <Text fontSize="sm" color="gray.600">{formatDate(ev.startAt || ev.date)}</Text>
-                    </Box>
-                    {ev._id && (
-                      <Button variant="outline" colorScheme="pink" size="sm" onClick={() => navigate(`/events/${ev._id}`)}>
-                        Details
-                      </Button>
-                    )}
-                  </Flex>
-                );
-              })}
-              {!rsvps.length && <Text color="gray.500" fontSize="sm">No upcoming RSVPs yet.</Text>}
-            </VStack>
-          </Card>
-        </VStack>
-      )}
+  <VStack spacing={6} align="stretch">
+        <Calendar rsvps={rsvps} />
+      </VStack>
+    )}
+  
 
       {activeTab === "my-rsvps" && (
         <Card>
