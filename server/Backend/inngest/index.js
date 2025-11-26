@@ -4,7 +4,7 @@ import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 // If you have an Event model with attendees, import it:
 import Event from "../models/Event.js"; // adjust if your path/name differs
-
+import EventReminder from "../models/EventReminder.js";
 // 🔹 Clerk server SDK
 import { clerkClient as clerk } from "@clerk/express";
 
@@ -13,6 +13,85 @@ import { clerkClient as clerk } from "@clerk/express";
 // ------------------------------------------------------------------
 export const inngest = new Inngest({ id: "fanevent-app" });
 
+
+// 🔔 Per-user event reminder sweep
+export const eventReminderOffsets = inngest.createFunction(
+  { id: "event-reminder-offsets" },
+  { cron: "0 * * * *" }, // run hourly
+  async () => {
+    const now = new Date();
+    const in2h = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+    // 1) Events starting in the next 2 hours
+    const events = await Event.find({
+      startAt: { $gte: now, $lte: in2h },
+    })
+      .select({ _id: 1, title: 1, startAt: 1 })
+      .lean();
+
+    if (!events.length) return { ok: true, events: 0, notifications: 0 };
+
+    const eventIds = events.map((e) => e._id);
+    const byId = Object.fromEntries(
+      events.map((e) => [String(e._id), e])
+    );
+
+    // 2) All EventReminder docs for those events
+    const reminders = await EventReminder.find({
+      eventId: { $in: eventIds },
+      offsets: { $exists: true, $ne: [] },
+    }).lean();
+
+    if (!reminders.length) {
+      return { ok: true, events: events.length, notifications: 0 };
+    }
+
+    const docs = [];
+
+    for (const r of reminders) {
+      const ev = byId[String(r.eventId)];
+      if (!ev) continue;
+
+      const minutesUntil = Math.round(
+        (new Date(ev.startAt).getTime() - now.getTime()) / 60000
+      );
+      if (minutesUntil <= 0) continue;
+
+      const offsets = Array.isArray(r.offsets) ? r.offsets : [];
+
+      // 3) Fire if we’re within this hour of one of the offsets
+      const shouldFire = offsets.some(
+        (off) => minutesUntil <= off && minutesUntil > off - 60
+      );
+      if (!shouldFire) continue;
+
+      docs.push({
+        userId: r.userId,
+        type: "EVENT_REMINDER",
+        data: {
+          eventId: ev._id,
+          eventTitle: ev.title,
+          message: `Reminder: “${ev.title}” starts in about ${minutesUntil} minutes.`,
+        },
+        link: `/events/${ev._id}`,
+        read: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (docs.length) {
+      await Notification.collection.insertMany(docs);
+    }
+
+    return {
+      ok: true,
+      events: events.length,
+      reminders: reminders.length,
+      notifications: docs.length,
+    };
+  }
+);
 
 export const perMinuteReminderSweep = inngest.createFunction(
   { id: "per-minute-reminder-sweep" },
@@ -304,4 +383,5 @@ export const functions = [
   eventReminder,
   weeklyDigest,
   perMinuteReminderSweep,
+  eventReminderOffsets,
 ];
