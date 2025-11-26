@@ -226,12 +226,70 @@ r.get("/:id/attendees", requireAuth, requireOrganizer, async (req, res) => {
     checkOutAt: r.checkOutAt || null,
     attended: !!r.attended,
     attendedHours: r.attendedHours ?? null,
-    status: r.attended ? "confirmed" : "pending",
-    liked: likedSet.has(r.userId),
+   // Prefer explicit status/attendanceStatus if present,
+   // fall back to legacy attended flag
+   status: r.status || (r.attended ? "confirmed" : "pending"),
+   attendanceStatus: r.attendanceStatus || (r.attended ? "confirmed" : "pending"),
+   confirmed: !!r.confirmed,
+   confirmedByOrganizer: !!r.confirmedByOrganizer,
+   organizerConfirmed: !!r.confirmedByOrganizer, // alias for convenience on FE
+   liked: likedSet.has(r.userId),
   }));
 
   res.json(payload);
 });
+
+// POST /api/organizer/events/:eventId/attendees/:attendeeId/confirm
+// POST /api/organizer/events/:eventId/attendees/:attendeeId/confirm
+r.post(
+  "/:eventId/attendees/:attendeeId/confirm",
+  requireAuth,
+  requireRole("organizer"),
+  async (req, res) => {
+    const { eventId, attendeeId } = req.params;
+    console.log("[confirm] params:", { eventId, attendeeId });
+
+    try {
+      // If attendee rows are their own docs, simplest is just by _id
+      const rsvp = await RSVP.findByIdAndUpdate(
+        attendeeId,
+        {
+          $set: {
+            status: "confirmed",
+            attendanceStatus: "confirmed",
+            confirmed: true,
+            confirmedByOrganizer: true,
+          },
+        },
+        { new: true } // return updated doc
+      );
+
+      if (!rsvp) {
+        console.warn("[confirm] RSVP not found for attendeeId:", attendeeId);
+        return res.status(404).json({ message: "RSVP not found" });
+      }
+
+      // Optional safety check: ensure this RSVP really belongs to that event
+      if (String(rsvp.eventId) !== String(eventId)) {
+        console.warn("[confirm] RSVP belongs to different event", {
+          rsvpEventId: rsvp.eventId,
+          eventId,
+        });
+        return res.status(400).json({ message: "RSVP does not belong to this event" });
+      }
+
+      console.log("[confirm] RSVP updated:", rsvp._id);
+      return res.json({ message: "Attendance confirmed", rsvp });
+    } catch (err) {
+      console.error("[confirm] error:", err);
+      return res.status(500).json({
+        message: err?.message || "Failed to confirm attendance",
+      });
+    }
+  }
+);
+
+
 
 // DELETE /api/organizer/events/:id
 r.delete("/:id", requireAuth, requireOrganizer, async (req, res, next) => {

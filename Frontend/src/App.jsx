@@ -71,6 +71,7 @@ function OrganizerRoutes() {
         <Route path="/groups" element={<Groups />} />
         <Route path="/groups/:id" element={<GroupDetails />} />
         <Route path="/my-dashboard" element={<MyDashboard />} />
+        <Route path="/notifications" element={<NotificationCenter />} />
 
         {/* Protected organizer page */}
         <Route
@@ -104,6 +105,7 @@ function AdminRoutes() {
         <Route path="/groups" element={<Groups />} />
         <Route path="/groups/:id" element={<GroupDetails />} />
         <Route path="/my-dashboard" element={<MyDashboard />} />
+        <Route path="/notifications" element={<NotificationCenter />} />
 
         {/* Organizer page still allowed only to organizers, so redirect admins away */}
         <Route path="/organizer" element={<Navigate to="/" replace />} />

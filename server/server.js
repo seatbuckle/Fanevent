@@ -27,6 +27,8 @@ import groupsAdmin from "./Backend/routes/groups.admin.js";
 import organizerAnnouncements from './Backend/routes/announcements.organizer.js';
 import notificationsRoutes from "./Backend/routes/notifications.routes.js";
 import healthRouter from "./Backend/routes/health.js";
+import notificationPreferences from "./Backend/routes/notificationPreferences.js"
+import eventReminderRoutes from './Backend/routes/eventReminders.js';
 
 const app = express();
 
@@ -259,6 +261,8 @@ app.use('/api/organizer/events', eventsOrganizer);
 app.use('/api/organizer/announcements', organizerAnnouncements);
 app.use('/api/notifications', notificationsRoutes);
 app.use("/api", healthRouter);
+app.use("/api/notification-preferences", notificationPreferences);
+app.use("/api/event-reminders", eventReminderRoutes);
 
 
 // ==================================================================

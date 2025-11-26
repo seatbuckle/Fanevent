@@ -24,6 +24,40 @@ import { api } from "../lib/api";
 import CreateGroupModal from "@/components/CreateGroupModal";
 
 /* ======================= Helpers ======================= */
+
+// --- Pastel helpers (match Admin Dashboard) ---
+const statusColor = (status) => {
+  const s = (status || "").toLowerCase();
+
+  if (s === "approved") return "#F0FDF4"; // soft green
+  if (s === "pending") return "#FEF9C3"; // soft yellow
+  if (s === "rejected") return "#FEE2E2"; // soft red
+  if (s === "cancelled" || s === "canceled") return "#E5E7EB"; // light gray
+
+  return "#E5E7EB"; // fallback
+};
+
+const pastelTextColor = (bg) => {
+  if (!bg) return "#111827"; // default slate-ish
+
+  const key = bg.toString().toUpperCase();
+
+  if (key === "#FEE2E2") return "#EF4444"; // red
+  if (key === "#DBEAFE") return "#3B82F6"; // blue
+  if (key === "#F3E8FF") return "#6B21A8"; // purple/indigo
+  if (key === "#FEF9C3") return "#854D0E"; // yellow/brown
+  if (key === "#F0FDF4") return "#166534"; // green
+  if (key === "#FCE7F3") return "#EC4899"; // pink
+
+  return "#111827"; // fallback dark gray
+};
+
+const capitalizeFirst = (value = "") => {
+  const s = String(value).trim();
+  if (!s) return "";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
 const formatDate = (dateString) => {
   if (!dateString) return "";
   const date = new Date(dateString);
@@ -41,43 +75,44 @@ const mergeDateTime = (dateStr, timeStr) => {
   return base.toISOString();
 };
 
-// Status pill styles (match admin dashboard look)
+// Status pill styles (using same pastel hexes as Admin Dashboard)
+// Status pill styles (using same pastel hexes as Admin Dashboard)
 const getStatusStyles = (status) => {
-  const s = (status || "").toLowerCase();
-  switch (s) {
-    case "approved":
-      return {
-        bg: "green.50",
-        color: "green.700",
-        borderColor: "green.200",
-        label: "Approved",
-      };
-    case "rejected":
-      return {
-        bg: "red.50",
-        color: "red.700",
-        borderColor: "red.200",
-        label: "Rejected",
-      };
-    case "cancelled":
-    case "canceled":
-      return {
-        bg: "gray.100",
-        color: "gray.700",
-        borderColor: "gray.300",
-        label: "Cancelled",
-      };
-    case "pending":
-    default:
-      return {
-        bg: "yellow.50",
-        color: "yellow.700",
-        borderColor: "yellow.200",
-        label: "Pending",
-      };
+  const raw = (status || "pending").toLowerCase();
+  const bg = statusColor(raw);
+  const color = pastelTextColor(bg);
+
+  let label;
+  if (raw === "canceled" || raw === "cancelled") {
+    label = "Cancelled";
+  } else {
+    label = capitalizeFirst(raw);
   }
+
+  return { bg, color, label };
 };
 
+// Attendee status pill styles (confirmed / pending / canceled)
+const getAttendeeStatusStyles = (status, { isOrganizerConfirmed = false } = {}) => {
+  const raw = (status || "").toLowerCase();
+
+  let bg;
+  if (isOrganizerConfirmed || raw === "confirmed" || raw === "confirmed by organizer") {
+    // confirmed / confirmed by organizer → soft green
+    bg = "#F0FDF4";
+  } else if (raw === "canceled" || raw === "cancelled") {
+    // canceled / cancelled → soft red
+    bg = "#FEE2E2";
+  } else {
+    // default pending-ish → soft yellow
+    bg = "#FEF9C3";
+  }
+
+  return {
+    bg,
+    color: pastelTextColor(bg),
+  };
+};
 
 /* ======================= Reusable Card ======================= */
 const Card = ({ children, ...props }) => (
@@ -1329,6 +1364,12 @@ export default function OrganizerDashboard() {
   const [attendees, setAttendees] = React.useState([]);
   const [loadingAttendees, setLoadingAttendees] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [confirmingIds, setConfirmingIds] = React.useState(new Set());
+    // analytics: RSVP counts per event
+  const [analyticsCounts, setAnalyticsCounts] = React.useState({});
+  const [loadingAnalytics, setLoadingAnalytics] = React.useState(false);
+
+
 
   // modals
   const [createGroupOpen, setCreateGroupOpen] = React.useState(false);
@@ -1336,41 +1377,81 @@ export default function OrganizerDashboard() {
   const [announcementModalOpen, setAnnouncementModalOpen] = React.useState(false);
   const [editingEvent, setEditingEvent] = React.useState(null);
 
-  // load my events
+    // Load my events (no auto-select, so "All Events" can stay)
   const loadEvents = React.useCallback(async () => {
     setLoadingEvents(true);
     try {
-      // ✅ Use the correct backend route that exists
       const rows = await api("/api/organizer/events/mine");
       setEvents(Array.isArray(rows) ? rows : []);
-      if (!selectedEventId && rows?.length) setSelectedEventId(rows[0]._id);
+      // ❌ Do NOT auto-set selectedEventId here.
+      // That was what forced the dropdown to a single event.
     } catch (e) {
       toast.error(e?.message || "Failed to load events");
     } finally {
       setLoadingEvents(false);
     }
-  }, [selectedEventId]);
+  }, []);
+
+  // load my events
+    // Load attendees for either a single event OR all events
+  const loadAttendees = React.useCallback(async () => {
+    setLoadingAttendees(true);
+
+    try {
+      // If there are no events at all, there are no attendees to show
+      if (!events.length) {
+        setAttendees([]);
+        return;
+      }
+
+      // If an event is selected, load just that event's attendees
+      if (selectedEventId) {
+        const rows = await api(`/api/organizer/events/${selectedEventId}/attendees`);
+        setAttendees(Array.isArray(rows) ? rows : []);
+        return;
+      }
+
+      // "All Events" selected → load attendees for ALL of this organizer's events
+      const results = await Promise.all(
+        events.map(async (ev) => {
+          try {
+            const rows = await api(`/api/organizer/events/${ev._id}/attendees`);
+            return {
+              eventId: ev._id,
+              rows: Array.isArray(rows) ? rows : [],
+            };
+          } catch (err) {
+            console.error("Failed to load attendees for event", ev._id, err);
+            return { eventId: ev._id, rows: [] };
+          }
+        })
+      );
+
+      // Flatten and make sure each attendee has an eventId
+      const combined = results.flatMap(({ eventId, rows }) =>
+        rows.map((r) => ({
+          ...r,
+          eventId: r.eventId || eventId,
+        }))
+      );
+
+      setAttendees(combined);
+    } catch (e) {
+      toast.error(e?.message || "Failed to load attendees");
+      setAttendees([]);
+    } finally {
+      setLoadingAttendees(false);
+    }
+  }, [events, selectedEventId]);
+
+
 
   React.useEffect(() => {
     if (isLoaded) loadEvents();
   }, [isLoaded, loadEvents]);
 
-  // load attendees when event changes
-  const loadAttendees = React.useCallback(async () => {
-    if (!selectedEventId) {
-      setAttendees([]);
-      return;
-    }
-    setLoadingAttendees(true);
-    try {
-      const rows = await api(`/api/organizer/events/${selectedEventId}/attendees`);
-      setAttendees(Array.isArray(rows) ? rows : []);
-    } catch (e) {
-      toast.error(e?.message || "Failed to load attendees");
-    } finally {
-      setLoadingAttendees(false);
-    }
-  }, [selectedEventId]);
+
+
 
 const loadAnnouncements = React.useCallback(async () => {
   setLoadingAnnouncements(true);
@@ -1386,15 +1467,62 @@ const loadAnnouncements = React.useCallback(async () => {
   }
 }, []);
 
-  React.useEffect(() => {
+  const refreshAnalyticsCounts = React.useCallback(async () => {
+    if (!events.length) {
+      setAnalyticsCounts({});
+      return;
+    }
+
+    setLoadingAnalytics(true);
+    try {
+      const results = await Promise.all(
+        events.map(async (ev) => {
+          try {
+            const rows = await api(`/api/organizer/events/${ev._id}/attendees`);
+            return {
+              eventId: ev._id,
+              count: Array.isArray(rows) ? rows.length : 0,
+            };
+          } catch (err) {
+            console.error("Analytics attendees fetch failed for event", ev._id, err);
+            return { eventId: ev._id, count: 0 };
+          }
+        })
+      );
+
+      const map = {};
+      results.forEach(({ eventId, count }) => {
+        map[eventId] = count;
+      });
+      setAnalyticsCounts(map);
+    } catch (e) {
+      toast.error(e?.message || "Failed to refresh analytics");
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  }, [events]);
+
+
+ React.useEffect(() => {
+    if (!events.length) {
+      setAttendees([]);
+      return;
+    }
     loadAttendees();
-  }, [loadAttendees]);
+  }, [events, selectedEventId, loadAttendees]);
 
   React.useEffect(() => {
     if (activeTab === "announcements") {
-    loadAnnouncements();
+      loadAnnouncements();
     }
   }, [activeTab, loadAnnouncements]);
+
+  React.useEffect(() => {
+    if (activeTab === "analytics" && events.length) {
+      refreshAnalyticsCounts();
+    }
+  }, [activeTab, events, refreshAnalyticsCounts]);
+
 
   const openEditModal = (ev) => {
     setEditingEvent(ev);
@@ -1405,6 +1533,29 @@ const loadAnnouncements = React.useCallback(async () => {
     setEditingEvent(null);
   };
   
+const confirmAttendance = async (attendee) => {
+  const attendeeId = attendee?._id;
+  const eventId = attendee?.eventId || selectedEventId;
+
+  await api(`/api/organizer/events/${eventId}/attendees/${attendeeId}/confirm`, {
+    method: "POST",
+  });
+
+  setAttendees((rows) =>
+    rows.map((r) =>
+      String(r._id) === String(attendeeId)
+        ? {
+            ...r,
+            status: "confirmed",
+            attendanceStatus: "confirmed",
+            confirmed: true,
+            confirmedByOrganizer: true,
+          }
+        : r
+    )
+  );
+};
+
 
   const deleteEvent = async (id) => {
     if (!id) return;
@@ -1422,47 +1573,58 @@ const loadAnnouncements = React.useCallback(async () => {
   };
 
   // filtered attendees by search
-  const filteredAttendees = attendees.filter((a) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
+ const filteredAttendees = attendees.filter((a) => {
+  // 1) Event filter
+  if (selectedEventId && String(a.eventId) !== String(selectedEventId)) {
+    return false;
+  }
 
-    const name = (
-      a?.name ||
-      a?.userName ||
-      a?.user?.name ||
-      ""
-    ).toLowerCase();
+  // 2) Search filter
+  if (!searchQuery) return true;
+  const q = searchQuery.toLowerCase();
 
-    const email = (
-      a?.email ||
-      a?.userEmail ||
-      a?.user?.email ||
-      ""
-    ).toLowerCase();
+  const name = (
+    a?.name ||
+    a?.userName ||
+    a?.user?.name ||
+    ""
+  ).toLowerCase();
 
-    const eventTitle = (
-      a?.eventTitle ||
-      a?.event?.title ||
-      events.find((e) => String(e._id) === String(a.eventId))?.title ||
-      ""
-    ).toLowerCase();
+  const email = (
+    a?.email ||
+    a?.userEmail ||
+    a?.user?.email ||
+    ""
+  ).toLowerCase();
 
-    return (
-      name.includes(q) ||
-      email.includes(q) ||
-      eventTitle.includes(q)
-    );
-  });
+  const eventTitle = (
+    a?.eventTitle ||
+    a?.event?.title ||
+    events.find((e) => String(e._id) === String(a.eventId))?.title ||
+    ""
+  ).toLowerCase();
+
+  return name.includes(q) || email.includes(q) || eventTitle.includes(q);
+});
 
 
-    // === Derived analytics: attendee counts per event (live truth based on events state) ===
-  const eventsWithCounts = events.map((e) => {
-    const count =
+
+   const eventsWithCounts = events.map((e) => {
+    // Prefer analyticsCounts (live RSVP count from /attendees),
+    // fall back to any baked-in count if it exists.
+    const analyticsCount =
+      typeof analyticsCounts[e._id] === "number"
+        ? analyticsCounts[e._id]
+        : undefined;
+
+    const fallbackCount =
       typeof e.attendeesCount === "number"
         ? e.attendeesCount
         : Array.isArray(e.attendees)
         ? e.attendees.length
         : 0;
+
+    const count = analyticsCount ?? fallbackCount;
 
     return { ...e, _popCount: count };
   });
@@ -1472,6 +1634,20 @@ const loadAnnouncements = React.useCallback(async () => {
   );
   const topPopular = popularEvents.slice(0, 3);
   const maxPopCount = topPopular[0]?._popCount || 1;
+
+
+    // === High-level stats for analytics ===
+  const totalEvents = eventsWithCounts.length;
+  const totalRsvps = eventsWithCounts.reduce((sum, e) => sum + (e._popCount || 0), 0);
+  const approvedEvents = eventsWithCounts.filter((e) => e.status === "approved").length;
+
+  const now = new Date();
+  const upcomingEvents = eventsWithCounts.filter(
+    (e) => e.startAt && new Date(e.startAt) >= now
+  ).length;
+  const pastEvents = eventsWithCounts.filter(
+    (e) => e.startAt && new Date(e.startAt) < now
+  ).length;
 
 
   if (!isLoaded) {
@@ -1498,7 +1674,7 @@ const loadAnnouncements = React.useCallback(async () => {
               Drafts
             </Button>
             <Button
-              colorScheme="pink"
+              colorPalette="green"
               rounded="full"
               onClick={() => setEventModalOpen(true)}
               size="md"
@@ -1532,16 +1708,17 @@ const loadAnnouncements = React.useCallback(async () => {
             const val = tab.toLowerCase().replace(" ", "-");
             const active = activeTab === val;
             return (
-              <Button
-                key={tab}
-                size="sm"
-                rounded="full"
-                variant={active ? "solid" : "ghost"}
-                colorScheme="pink"
-                onClick={() => setActiveTab(val)}
-              >
-                {tab}
-              </Button>
+            <Button
+              key={tab}
+              size="sm"
+              rounded="full"
+              variant={active ? "solid" : "ghost"}
+              colorPalette="pink"
+              onClick={() => setActiveTab(val)}
+            >
+              {tab}
+            </Button>
+
             );
           })}
         </HStack>
@@ -1623,26 +1800,25 @@ const loadAnnouncements = React.useCallback(async () => {
                     </Text>
 
                     {(() => {
-                      const s = getStatusStyles(ev.status);
+                      // Use the event's own status (approved, pending, rejected, cancelled...)
+                      const { bg, color, label } = getStatusStyles(ev.status);
+
                       return (
-                        <Box
-                          as="span"
+                        <Badge
+                          bg={bg}
+                          color={color}
+                          rounded="full"
                           px={3}
                           py={1}
-                          borderRadius="full"
+                          w="fit-content"
                           fontSize="xs"
                           fontWeight="semibold"
-                          bg={s.bg}
-                          color={s.color}
-                          borderWidth="1px"
-                          borderColor={s.borderColor}
-                          textTransform="capitalize"
+                          textTransform="none"
                         >
-                          {s.label}
-                        </Box>
+                          {label}
+                        </Badge>
                       );
                     })()}
-
 
                     <HStack spacing={2}>
                       <Button
@@ -1655,7 +1831,6 @@ const loadAnnouncements = React.useCallback(async () => {
                       </Button>
                       <Button
                         variant="ghost"
-                        colorScheme="pink"
                         rounded="full"
                         size="sm"
                         onClick={() => openEditModal(ev)}
@@ -1721,9 +1896,14 @@ const loadAnnouncements = React.useCallback(async () => {
                 ))}
               </Box>
 
-              <Button variant="outline" rounded="full" colorScheme="pink" onClick={loadAttendees}>
+              <Button
+                variant="outline"
+                rounded="full"
+                colorPalette="pink"
+                onClick={loadAttendees}
+              >
                 Refresh
-              </Button>
+</Button>
             </Flex>
 
             {/* Desktop header */}
@@ -1751,49 +1931,106 @@ const loadAnnouncements = React.useCallback(async () => {
             <VStack spacing={3} mt={4} align="stretch">
               {loadingAttendees && <Text color="gray.500">Loading attendees…</Text>}
               {!loadingAttendees &&
-                filteredAttendees.map((a) => (
-                  <Grid
-                    key={a._id || `${a.userId}-${a.eventId}`}
-                    templateColumns={{ base: "1fr", lg: "1.6fr 1.2fr 1fr 1fr" }}
-                    gap={4}
-                    alignItems="center"
-                    p={4}
-                    borderWidth="1px"
-                    borderRadius="xl"
-                    _hover={{ bg: "gray.50" }}
-                  >
-                    <Box>
-                      <Text fontWeight="medium">{a.name || a.userName || a.user?.name || "User"}</Text>
-                      <Text fontSize="sm" color="gray.600">
-                        {a.email || a.userEmail || a.user?.email}
-                      </Text>
-                    </Box>
+                filteredAttendees.map((a) => {
+                  const idKey = `${a._id || `${a.userId || "user"}-${a.eventId || "event"}`}`;
+                  const keyForConfirm = `${idKey}::${a.eventId || selectedEventId}`;
 
-                    <Text fontSize="sm">{a.eventTitle || events.find((e) => e._id === a.eventId)?.title}</Text>
-                    <Text fontSize="sm">
-                      {a.rsvpedAt || a.rsvpAt || a.createdAt
-                        ? new Date(a.rsvpedAt || a.rsvpAt || a.createdAt).toLocaleDateString()
-                        : "-"}
-                    </Text>
+                  // ✅ Organizer-specific confirmation flag
+                  const isOrganizerConfirmed =
+                    a?.confirmedByOrganizer === true ||
+                    a?.organizerConfirmed === true ||
+                    a?.attendanceStatus === "confirmed-by-organizer";
 
-
-                    <Badge
-                      colorScheme={
-                        a.status === "confirmed" ? "green" : a.status === "canceled" ? "red" : "yellow"
-                      }
-                      rounded="full"
-                      px={3}
-                      py={1}
-                      w="fit-content"
+                  return (
+                    <Grid
+                      key={a._id || `${a.userId}-${a.eventId}`}
+                      templateColumns={{ base: "1fr", lg: "1.6fr 1.2fr 1fr 1fr" }}
+                      gap={4}
+                      alignItems="center"
+                      p={4}
+                      borderWidth="1px"
+                      borderRadius="xl"
+                      _hover={{ bg: "gray.50" }}
                     >
-                      {a.status || "pending"}
-                    </Badge>
-                  </Grid>
-                ))}
+                      {/* Name / Email */}
+                      <Box>
+                        <Text fontWeight="medium">
+                          {a.name || a.userName || a.user?.name || "User"}
+                        </Text>
+                        <Text fontSize="sm" color="gray.600">
+                          {a.email || a.userEmail || a.user?.email}
+                        </Text>
+                      </Box>
+
+                      {/* Event */}
+                      <Text fontSize="sm">
+                        {a.eventTitle ||
+                          events.find((e) => e._id === a.eventId)?.title}
+                      </Text>
+
+                      {/* RSVP Date */}
+                      <Text fontSize="sm">
+                        {a.rsvpedAt || a.rsvpAt || a.createdAt
+                          ? new Date(
+                              a.rsvpedAt || a.rsvpAt || a.createdAt
+                            ).toLocaleDateString()
+                          : "-"}
+                      </Text>
+
+                      {/* Status + Confirm button */}
+                      <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
+                      {(() => {
+                        const rawStatus = isOrganizerConfirmed
+                          ? "confirmed by organizer"
+                          : (a.status || "pending");
+
+                        // Capitalize first letter of the phrase (e.g. "Confirmed by organizer")
+                        const label = capitalizeFirst(rawStatus);
+
+                        const { bg, color } = getAttendeeStatusStyles(rawStatus, {
+                          isOrganizerConfirmed,
+                        });
+
+                        return (
+                          <Badge
+                            bg={bg}
+                            color={color}
+                            rounded="full"
+                            px={3}
+                            py={1}
+                            w="fit-content"
+                            fontSize="xs"
+                            fontWeight="semibold"
+                            textTransform="none"
+                          >
+                            {label}
+                          </Badge>
+                        );
+                      })()}
+
+
+                        {!isOrganizerConfirmed && a.status !== "canceled" && (
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            rounded="full"
+                            colorPalette="green"
+                            onClick={() => confirmAttendance(a)}
+                            isLoading={confirmingIds.has(keyForConfirm)}
+                          >
+                            Confirm
+                          </Button>
+                        )}
+                      </Box>
+                    </Grid>
+                  );
+                })}
+
               {!loadingAttendees && !filteredAttendees.length && (
                 <Text color="gray.500">No attendees found.</Text>
               )}
             </VStack>
+
           </Card>
         )}
 
@@ -1806,7 +2043,7 @@ const loadAnnouncements = React.useCallback(async () => {
             <Button variant="outline" rounded="full" onClick={loadAnnouncements}>
               Refresh
             </Button>
-            <Button colorScheme="pink" rounded="full" onClick={() => setAnnouncementModalOpen(true)}>
+            <Button colorPalette="green" rounded="full" onClick={() => setAnnouncementModalOpen(true)}>
               New Announcement
             </Button>
           </Flex>
@@ -1850,80 +2087,156 @@ const loadAnnouncements = React.useCallback(async () => {
           </Card>
         )}
 
-        {/* ======================= Analytics (placeholder UI) ======================= */}
+                {/* ======================= Analytics ======================= */}
         {activeTab === "analytics" && (
           <VStack spacing={6} align="stretch">
             <Card>
               <Heading size="md" mb={5}>
                 Event Analytics
               </Heading>
-              <Grid templateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }} gap={6}>
-                <Box bg="gray.50" rounded="xl" p={5} borderWidth="1px" borderColor="gray.200">
+
+                            {loadingAnalytics && (
+                <Text fontSize="sm" color="gray.500" mb={3}>
+                  Refreshing analytics…
+                </Text>
+              )}
+
+              {/* Top summary cards */}
+              <Grid templateColumns={{ base: "1fr", md: "repeat(4, 1fr)" }} gap={6}>
+                <Box
+                  bg="gray.50"
+                  rounded="xl"
+                  p={5}
+                  borderWidth="1px"
+                  borderColor="gray.200"
+                >
                   <Text fontSize="sm" color="gray.600" mb={1}>
                     Total Events
                   </Text>
-                  <Heading size="xl">{events.length}</Heading>
+                  <Heading size="xl">{totalEvents}</Heading>
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    All events you&apos;ve created in lifetime
+                  </Text>
                 </Box>
-                <Box bg="gray.50" rounded="xl" p={5} borderWidth="1px" borderColor="gray.200">
+
+                <Box
+                  bg="gray.50"
+                  rounded="xl"
+                  p={5}
+                  borderWidth="1px"
+                  borderColor="gray.200"
+                >
                   <Text fontSize="sm" color="gray.600" mb={1}>
                     Total RSVPs
                   </Text>
-                  <Heading size="xl">
-                    {events.reduce((sum, e) => sum + (e.attendeesCount || e.attendees?.length || 0), 0)}
-                  </Heading>
+                  <Heading size="xl">{totalRsvps}</Heading>
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    Based on per-event attendee counts
+                  </Text>
                 </Box>
-                <Box bg="gray.50" rounded="xl" p={5} borderWidth="1px" borderColor="gray.200">
+
+                <Box
+                  bg="gray.50"
+                  rounded="xl"
+                  p={5}
+                  borderWidth="1px"
+                  borderColor="gray.200"
+                >
                   <Text fontSize="sm" color="gray.600" mb={1}>
                     Approved Events
                   </Text>
-                  <Heading size="xl">
-                    {events.filter((e) => e.status === "approved").length}
+                  <Heading size="xl">{approvedEvents}</Heading>
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    Ready and visible to fans
+                  </Text>
+                </Box>
+
+                <Box
+                  bg="gray.50"
+                  rounded="xl"
+                  p={5}
+                  borderWidth="1px"
+                  borderColor="gray.200"
+                >
+                  <Text fontSize="sm" color="gray.600" mb={1}>
+                    Events Occurrence
+                  </Text>
+                  <Heading size="l">
+                    You have {upcomingEvents} events upcoming.
+                  </Heading> 
+                  <Heading size="l">
+                    You have held {pastEvents} events.
                   </Heading>
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    Based on event start date
+                  </Text>
                 </Box>
               </Grid>
+
               <Separator my={6} />
-              <Heading size="sm" mb={3}>
-                Event Popularity
+
+              {/* Chart: Top events by RSVPs */}
+              <Heading size="sm" mb={1}>
+                Top Events by RSVPs
               </Heading>
-              <Flex gap={4} h="260px" align="flex-end">
-                {topPopular.map((e, i) => {
-                  // 20–90% height based strictly on relative attendee count
-                  const ratio = e._popCount / maxPopCount;
-                  const h = 20 + ratio * 70;
+              <Text fontSize="xs" color="gray.500" mb={4}>
+                Showing up to 3 events with the highest RSVP counts
+              </Text>
 
-                  return (
-                    <Box
-                      key={e._id}
-                      flex="1"
-                      bg={["pink.400", "pink.500", "pink.300"][i % 3]}
-                      rounded="xl"
-                      h={`${h}%`}
-                      display="flex"
-                      flexDir="column"
-                      alignItems="center"
-                      justifyContent="flex-end"
-                      pb={3}
-                    >
-                      <Text color="white" fontSize="xs" mb={1}>
-                        {e._popCount} RSVP{e._popCount === 1 ? "" : "s"}
-                      </Text>
-                      <Text color="white" fontSize="sm" textAlign="center" px={2} noOfLines={2}>
-                        {e.title}
-                      </Text>
-                    </Box>
-                  );
-                })}
-                {topPopular.length === 0 && (
-                  <Box w="full" textAlign="center" color="gray.500" py={10}>
-                    No RSVP data yet.
-                  </Box>
-                )}
-              </Flex>
+              {topPopular.length === 0 ? (
+                <Box w="full" textAlign="center" color="gray.500" py={10}>
+                  No RSVP data yet. As attendees RSVP, you&apos;ll see the most popular events here.
+                </Box>
+              ) : (
+                <Box
+                  bg="gray.50"
+                  borderWidth="1px"
+                  borderColor="gray.200"
+                  rounded="2xl"
+                  p={4}
+                >
+                  <Flex gap={4} h="260px" align="flex-end">
+                    {topPopular.map((e, i) => {
+                      const safeCount = e._popCount || 0;
+                      const ratio = safeCount / (maxPopCount || 1);
+                      const h = 20 + ratio * 70; // 20–90% height window
 
-
+                      return (
+                        <Box
+                          key={e._id}
+                          flex="1"
+                          rounded="xl"
+                          h={`${h}%`}
+                          display="flex"
+                          flexDir="column"
+                          alignItems="center"
+                          justifyContent="flex-end"
+                          pb={3}
+                          bg={["pink.400", "pink.500", "pink.300"][i % 3]}
+                          boxShadow="sm"
+                        >
+                          <Text color="white" fontSize="xs" mb={1}>
+                            {safeCount} RSVP{safeCount === 1 ? "" : "s"}
+                          </Text>
+                          <Text
+                            color="white"
+                            fontSize="sm"
+                            textAlign="center"
+                            px={2}
+                            noOfLines={2}
+                          >
+                            {e.title}
+                          </Text>
+                        </Box>
+                      );
+                    })}
+                  </Flex>
+                </Box>
+              )}
             </Card>
           </VStack>
         )}
+
 
         {/* Modals */}
         <EventModal
