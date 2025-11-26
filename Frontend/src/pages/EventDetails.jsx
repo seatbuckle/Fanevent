@@ -31,6 +31,7 @@ import ReactPlayer from "react-player";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import ReportModal from "@/components/ui/ReportModal";
+import EventReminderControls from "@/components/EventReminderControls";
 
 const isMongoId = (s = "") => /^[a-fA-F0-9]{24}$/.test(s);
 
@@ -98,6 +99,25 @@ const getVideoThumb = (url = "") => {
 
 const GOOGLE_MAPS_API_KEY = "AIzaSyCwj0qLG6HYkmltOOKFz3xl6v4wpT6k-5M";
 
+// --- shared date helpers for RSVP calendar ---
+const toDateKey = (input) => {
+  if (!input) return null;
+  const d = new Date(input);
+  if (Number.isNaN(d)) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+// pull an event out of an RSVP row (works with several shapes)
+const unwrapEvent = (row = {}) => {
+  // your data uses `eventId` to store the actual event
+  return row.event || row.ev || row.eventId || row;
+};
+
+
+
 // ---- calendar helpers (mark the event day in current month) ----
 const getCurrentMonthInfo = () => {
   const now = new Date();
@@ -110,6 +130,399 @@ const getCurrentMonthInfo = () => {
     monthIndex: now.getMonth(),
   };
 };
+function RSVPCalendarMini({ rsvps, loading }) {
+  const [currentMonth, setCurrentMonth] = React.useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
+  const days = ["S", "M", "T", "W", "T", "F", "S"];
+
+  const monthLabel = React.useMemo(
+    () =>
+      currentMonth.toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+      }),
+    [currentMonth]
+  );
+
+  const today = React.useMemo(() => new Date(), []);
+  const todayKey = React.useMemo(() => toDateKey(today), [today]);
+
+const parsedEvents = React.useMemo(() => {
+  if (!Array.isArray(rsvps)) return [];
+
+  const parsed = rsvps
+    .map((row) => {
+      // Try to unwrap a nested event, but keep the row handy too
+      const ev = unwrapEvent(row);
+
+      // Try a bunch of common field names on BOTH row and ev
+      const when =
+        row.startAt ||
+        row.date ||
+        row.startsAt ||
+        row.startDate ||
+        row.eventDate ||
+        row.when ||
+        ev?.startAt ||
+        ev?.date ||
+        ev?.startsAt ||
+        ev?.startDate ||
+        ev?.eventDate ||
+        ev?.when;
+
+      if (!when) return null;
+
+      const d = new Date(when);
+      if (Number.isNaN(d.getTime())) return null;
+
+      return {
+        row,
+        ev,
+        date: d,
+        key: toDateKey(d),
+      };
+    })
+    .filter((x) => x && x.key);
+
+  // DEBUG: see what the calendar thinks your events are
+  console.log("Mini calendar parsedEvents:", parsed);
+
+  return parsed;
+}, [rsvps]);
+
+
+  // map YYYY-MM-DD -> count
+  const eventsByDay = React.useMemo(() => {
+    const map = {};
+    parsedEvents.forEach((e) => {
+      if (!e.key) return;
+      map[e.key] = (map[e.key] || 0) + 1;
+    });
+    return map;
+  }, [parsedEvents]);
+
+  // build the grid for the current month
+  const { weeks } = React.useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstOfMonth = new Date(year, month, 1);
+    const firstDay = firstOfMonth.getDay(); // 0-6
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7;
+    const cells = [];
+    for (let i = 0; i < totalCells; i++) {
+      const date = new Date(year, month, i - firstDay + 1);
+      cells.push(date);
+    }
+
+    const result = [];
+    for (let i = 0; i < cells.length; i += 7) {
+      result.push(cells.slice(i, i + 7));
+    }
+    return { weeks: result };
+  }, [currentMonth]);
+
+  const goMonth = (delta) => {
+    setCurrentMonth(
+      (prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1)
+    );
+  };
+
+  return (
+    <>
+      <Flex justify="space-between" align="center" mb={3}>
+        <Box>
+          <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+            Your Calendar
+          </Text>
+          <Text fontSize="xs" color="gray.500">
+            Pink dots show days you&apos;ve RSVP&apos;d
+          </Text>
+        </Box>
+        <Flex align="center" gap={1}>
+          <IconButton
+            aria-label="Previous month"
+            size="xs"
+            variant="ghost"
+            onClick={() => goMonth(-1)}
+          >
+            ←
+          </IconButton>
+          <Text fontSize="xs" fontWeight="medium" color="gray.700" mx={1}>
+            {monthLabel}
+          </Text>
+          <IconButton
+            aria-label="Next month"
+            size="xs"
+            variant="ghost"
+            onClick={() => goMonth(1)}
+          >
+            →
+          </IconButton>
+        </Flex>
+      </Flex>
+
+      {loading ? (
+        <Text fontSize="xs" color="gray.500">
+          Loading your RSVPs…
+        </Text>
+      ) : (
+        <>
+          {/* day labels */}
+          <Grid templateColumns="repeat(7, 1fr)" gap={1} mb={1}>
+            {days.map((d, idx) => (
+              <Text
+                key={`${d}-${idx}`}   // or just key={idx}
+                fontSize="xs"
+                textAlign="center"
+                fontWeight="semibold"
+                color="gray.500"
+              >
+                {d}
+              </Text>
+            ))}
+          </Grid>
+
+          {/* dates – keep height similar to the old calendar */}
+          <Box maxH="210px" overflow="hidden">
+            {weeks.map((week, wi) => (
+              <Grid key={wi} templateColumns="repeat(7, 1fr)" gap={1}>
+                {week.map((date) => {
+                  const key = toDateKey(date);
+                  const isCurrentMonth =
+                    date.getMonth() === currentMonth.getMonth();
+                  const hasEvents = !!eventsByDay[key];
+                  const isToday = key === todayKey;
+
+                  const baseColor = isCurrentMonth ? "gray.800" : "gray.400";
+
+                  return (
+                    <Box
+                      key={key || date.getTime()}
+                      textAlign="center"
+                      borderRadius="md"
+                      py={1}
+                      px={0.5}
+                      bg={isToday ? "pink.50" : "transparent"}
+                      borderWidth={isToday ? "1px" : "0px"}
+                      borderColor={isToday ? "pink.400" : "transparent"}
+                    >
+                      <Text
+                        fontSize="xs"
+                        fontWeight={isToday ? "bold" : "medium"}
+                        color={baseColor}
+                      >
+                        {date.getDate()}
+                      </Text>
+                      {hasEvents && (
+                        <Flex justify="center" mt={0.5} align="center" gap={0.5}>
+                          <Box
+                            w="6px"
+                            h="6px"
+                            borderRadius="full"
+                            bg="pink.400"
+                          />
+                          {eventsByDay[key] > 1 && (
+                            <Text fontSize="0.6rem" color="gray.500">
+                              {eventsByDay[key]}
+                            </Text>
+                          )}
+                        </Flex>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Grid>
+            ))}
+          </Box>
+
+          {!parsedEvents.length && (
+            <Text fontSize="xs" color="gray.500" mt={2}>
+              No upcoming RSVPs yet.
+            </Text>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+function RecommendedEventsSection({ currentEventId, currentTags = [] }) {
+  const navigate = useNavigate();
+  const [recommended, setRecommended] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!currentEventId) return;
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        // adjust this endpoint if your backend uses a different path
+        const res = await api(`/api/events/${currentEventId}/recommended`);
+        let items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+        // don’t recommend the event you’re already on
+        items = items.filter((ev) => String(ev._id) !== String(currentEventId));
+        if (!cancelled) setRecommended(items.slice(0, 3)); // show up to 3 like your mock
+      } catch (e) {
+        if (!cancelled) setRecommended([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentEventId]);
+
+  if (!currentEventId) return null;
+  if (!loading && !recommended.length) return null; // quiet if nothing to show
+
+  const getLocationLabel = (ev) => {
+    const parts = [ev.city, ev.state, ev.country, ev.locationName].filter(Boolean);
+    return parts[0] || "Online";
+  };
+
+  return (
+    <Box
+      mt={10}
+      bg="white"
+      borderRadius="2xl"
+      p={{ base: 4, md: 6 }}
+      boxShadow="sm"
+    >
+      <Flex justify="space-between" align="center" mb={4} gap={3}>
+        <Flex align="center" gap={2}>
+          <Text fontSize="sm" color="pink.500">
+            📈
+          </Text>
+          <Text fontWeight="semibold" fontSize="sm">
+            Events like this…
+          </Text>
+        </Flex>
+        <Button
+          variant="link"
+          color="#EC4899"
+          fontSize="sm"
+          onClick={() =>
+            navigate(`/events?similarTo=${encodeURIComponent(currentEventId)}`)
+          }
+        >
+          View All
+        </Button>
+      </Flex>
+
+      {loading ? (
+        <Text fontSize="sm" color="gray.500">
+          Finding similar events…
+        </Text>
+      ) : (
+        <>
+          {/* header row */}
+          <Grid
+            templateColumns={{ base: "1.4fr 1fr", md: "2fr 1.2fr 1.6fr" }}
+            gap={4}
+            mb={2}
+          >
+            <Text fontSize="xs" fontWeight="medium" color="gray.500">
+              Name
+            </Text>
+            <Text
+              fontSize="xs"
+              fontWeight="medium"
+              color="gray.500"
+              display={{ base: "none", md: "block" }}
+            >
+              Location
+            </Text>
+            <Text
+              fontSize="xs"
+              fontWeight="medium"
+              color="gray.500"
+              display={{ base: "none", md: "block" }}
+            >
+              Tags
+            </Text>
+          </Grid>
+
+          {/* rows */}
+          {recommended.map((ev) => (
+            <Grid
+              key={ev._id}
+              templateColumns={{ base: "1.4fr 1fr", md: "2fr 1.2fr 1.6fr" }}
+              gap={4}
+              py={2}
+              borderTopWidth="1px"
+              borderColor="gray.100"
+              alignItems="center"
+            >
+              {/* name */}
+              <Box>
+                <Button
+                  variant="link"
+                  color="gray.800"
+                  fontWeight="medium"
+                  fontSize="sm"
+                  onClick={() => navigate(`/events/${ev._id}`)}
+                >
+                  {ev.title || "Untitled event"}
+                </Button>
+              </Box>
+
+              {/* location */}
+              <Box display={{ base: "none", md: "block" }}>
+                <Box
+                  as="span"
+                  px={3}
+                  py={1}
+                  borderRadius="full"
+                  bg="gray.100"
+                  fontSize="xs"
+                  color="gray.700"
+                >
+                  {getLocationLabel(ev)}
+                </Box>
+              </Box>
+
+              {/* tags */}
+              <Flex
+                display={{ base: "none", md: "flex" }}
+                gap={2}
+                flexWrap="wrap"
+              >
+                {(ev.tags || currentTags || [])
+                  .slice(0, 3)
+                  .map((tag, idx) => (
+                    <Badge
+                      key={idx}
+                      px={3}
+                      py={1}
+                      borderRadius="full"
+                      fontSize="xs"
+                      fontWeight="medium"
+                      bg={idx === 0 ? "pink.50" : "green.50"}
+                      color={idx === 0 ? "#EC4899" : "#16A34A"}
+                    >
+                      {tag}
+                    </Badge>
+                  ))}
+              </Flex>
+            </Grid>
+          ))}
+        </>
+      )}
+    </Box>
+  );
+}
+
+
+
 
 export default function EventDetails() {
   const { id } = useParams();
@@ -143,6 +556,10 @@ export default function EventDetails() {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkOutLoading, setCheckOutLoading] = useState(false);
+
+  const [myRsvps, setMyRsvps] = useState([]);
+  const [loadingRsvpCalendar, setLoadingRsvpCalendar] = useState(false);
+
 
   // --------- load from API only (no dummy fallbacks) ----------
   useEffect(() => {
@@ -214,6 +631,7 @@ export default function EventDetails() {
       }
     };
 
+
     // reset on id change
     setEvent(null);
     setLoadError(null);
@@ -232,6 +650,50 @@ export default function EventDetails() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user?.id]);
+
+
+useEffect(() => {
+  if (!user?.id) {
+    setMyRsvps([]);
+    return;
+  }
+
+  let cancelled = false;
+
+  const loadRsvps = async () => {
+    setLoadingRsvpCalendar(true);
+    try {
+      const res = await api("/api/me/rsvps");
+
+      let list = [];
+      if (Array.isArray(res)) list = res;
+      else if (Array.isArray(res?.items)) list = res.items;
+      else if (Array.isArray(res?.rsvps)) list = res.rsvps;
+      else if (Array.isArray(res?.data)) list = res.data;
+      else if (Array.isArray(res?.rows)) list = res.rows;
+
+      if (!cancelled) {
+        setMyRsvps(list);
+        // temporary debug:
+        console.log("RSVP calendar raw:", res);
+        console.log("RSVP calendar list:", list);
+      }
+    } catch (e) {
+      if (!cancelled) {
+        console.error("Failed to load RSVPs", e);
+        setMyRsvps([]);
+      }
+    } finally {
+      if (!cancelled) setLoadingRsvpCalendar(false);
+    }
+  };
+
+  loadRsvps();
+  return () => {
+    cancelled = true;
+  };
+}, [user?.id]);
+
 
   // --------- actions (DB-only) ----------
   const requireLogin = () => {
@@ -339,6 +801,7 @@ export default function EventDetails() {
       setCheckOutLoading(false);
     }
   };
+  
 
   const handleShare = async () => {
     try {
@@ -390,6 +853,9 @@ export default function EventDetails() {
       eventDayInfo.year === year
     );
   };
+
+
+  const userHasRSVP = hasRSVP || isCheckedIn;
 
   if (!event && !loadError) return null;
 
@@ -671,6 +1137,18 @@ export default function EventDetails() {
                     )}
                   </Flex>
 
+                                    {/* LIKE / RSVP / CHECK-IN SECTION */}
+                  <Flex gap={3} mb={6} flexWrap="wrap">
+                    {/* ...all your buttons... */}
+                  </Flex>
+                  
+                  <Flex gap={3} mb={6} flexWrap="wrap">
+                    {userHasRSVP && (
+                      <EventReminderControls eventId={event._id} />
+                    )}
+                  </Flex>
+
+
                   {/* EVENT INFO */}
                   <Box mb={6}>
                     <Flex align="center" gap={3} mb={3}>
@@ -687,6 +1165,9 @@ export default function EventDetails() {
                             : "TBD"}
                         </Text>
                         <Text fontSize="xs" color="gray.600">
+                                                    {event.endAt
+                            ? `Starts ${new Date(event.startAt).toLocaleTimeString()}  |  `
+                            : ""}
                           {event.endAt
                             ? `Ends ${new Date(event.endAt).toLocaleTimeString()}`
                             : ""}
@@ -819,58 +1300,11 @@ export default function EventDetails() {
 
             {/* RIGHT SIDEBAR — Calendar, Media, Share/Contact, Hosted By */}
             <Box w={{ base: "100%", lg: "340px" }}>
-              {/* Calendar */}
-              <Box bg="white" borderRadius="2xl" p={6} mb={6} boxShadow="sm">
-                <Text fontSize="sm" fontWeight="semibold" mb={4} color="gray.700">
-                  Your Calendar
-                </Text>
-                <Box bg="pink.50" p={4} borderRadius="lg">
-                  <Text fontSize="xs" color="gray.600" mb={3} textAlign="center">
-                    {monthLabel} {year}
-                  </Text>
-                  <Grid templateColumns="repeat(7, 1fr)" gap={1}>
-                    {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-                      <Text key={i} fontSize="xs" textAlign="center" fontWeight="semibold">
-                        {d}
-                      </Text>
-                    ))}
-                    {[...Array(firstDay)].map((_, i) => (
-                      <Box key={i} />
-                    ))}
-                    {[...Array(daysInMonth)].map((_, i) => {
-                      const day = i + 1;
-                      const isToday = day === currentDay;
-                      const mark = hasEventOnDay(day);
-                      return (
-                        <Box
-                          key={day}
-                          position="relative"
-                          textAlign="center"
-                          p={1}
-                          borderRadius="md"
-                          bg={isToday ? "#EC4899" : "transparent"}
-                          color={isToday ? "white" : "gray.700"}
-                          fontSize="xs"
-                        >
-                          {day}
-                          {mark && (
-                            <Box
-                              position="absolute"
-                              bottom="2px"
-                              left="50%"
-                              transform="translateX(-50%)"
-                              w="4px"
-                              h="4px"
-                              borderRadius="full"
-                              bg={isToday ? "white" : "#EC4899"}
-                            />
-                          )}
-                        </Box>
-                      );
-                    })}
-                  </Grid>
-                </Box>
-              </Box>
+            {/* RSVP-aware Calendar (same footprint) */}
+            <Box bg="white" borderRadius="2xl" p={6} mb={6} boxShadow="sm">
+              <RSVPCalendarMini rsvps={myRsvps} loading={loadingRsvpCalendar} />
+            </Box>
+
 
               {/* MEDIA PREVIEW BOX */}
               <Box bg="white" borderRadius="2xl" p={4} mb={6} boxShadow="sm">

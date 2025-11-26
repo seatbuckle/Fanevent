@@ -253,6 +253,7 @@ const Navbar = () => {
                     onClick={() => navigate('/admin')}
                   />
                 )}
+
                 {role === "organizer" && (
                   <UserButton.Action
                     label="Organizer Dashboard"
@@ -260,19 +261,26 @@ const Navbar = () => {
                     onClick={() => navigate('/organizer')}
                   />
                 )}
-                {(role === "user" || !role) && (
-                  <UserButton.Action
-                    label="My Dashboard"
-                    labelIcon={<LayoutDashboard size={15} />}
-                    onClick={() => navigate('/my-dashboard')}
-                  />
-                )}
+
+                {/* Always available for all roles */}
+                <UserButton.Action
+                  label="My Dashboard"
+                  labelIcon={<LayoutDashboard size={15} />}
+                  onClick={() => navigate('/my-dashboard')}
+                />
+
                 <UserButton.Action
                   label="Messages"
                   labelIcon={<MessageSquare size={15} />}
                   onClick={() => navigate('/messages')}
                 />
+                <UserButton.Action
+                  label="Notification Center"
+                  labelIcon={<Bell size={15} />}
+                  onClick={() => navigate('/notifications')}
+                />
               </UserButton.MenuItems>
+
             </UserButton>
           </SignedIn>
 
@@ -416,9 +424,14 @@ const Navbar = () => {
                 flex="1"
                 h="50px"
                 _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
+                onClick={() => {
+                  setIsOpen(false);          // close mobile menu
+                  if (user) setIsNotifOpen(true); // open overlay
+                }}
               >
                 <Bell size={20} />
               </IconButton>
+
             </Flex>
 
             <Box h="1px" bg="gray.100" my={4} />
@@ -454,6 +467,7 @@ const Navbar = () => {
                     Admin Dashboard
                   </Button>
                 )}
+
                 {role === "organizer" && (
                   <Button
                     leftIcon={<LayoutDashboard size={18} />}
@@ -466,18 +480,19 @@ const Navbar = () => {
                     Organizer Dashboard
                   </Button>
                 )}
-                {(role === "user" || !role) && (
-                  <Button
-                    leftIcon={<LayoutDashboard size={18} />}
-                    variant="outline"
-                    fontSize="md"
-                    h="48px"
-                    onClick={() => { setIsOpen(false); navigate('/my-dashboard') }}
-                    _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
-                  >
-                    My Dashboard
-                  </Button>
-                )}
+
+                {/* Always available */}
+                <Button
+                  leftIcon={<LayoutDashboard size={18} />}
+                  variant="outline"
+                  fontSize="md"
+                  h="48px"
+                  onClick={() => { setIsOpen(false); navigate('/my-dashboard') }}
+                  _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
+                >
+                  My Dashboard
+                </Button>
+
                 <Button
                   leftIcon={<MessageSquare size={18} />}
                   variant="outline"
@@ -488,8 +503,19 @@ const Navbar = () => {
                 >
                   Messages
                 </Button>
+                <Button
+                  leftIcon={<Bell size={18} />}
+                  variant="outline"
+                  fontSize="md"
+                  h="48px"
+                  onClick={() => { setIsOpen(false); navigate('/notifications') }}
+                  _hover={{ bg: 'pink.50', color: '#EC4899', borderColor: '#EC4899' }}
+                >
+                  Notification Center
+                </Button>
               </Flex>
             </SignedIn>
+
           </Box>
         </Box>
       </Box>

@@ -352,9 +352,9 @@ const Calendar = ({ rsvps }) => {
 
       {/* Day names */}
       <Grid templateColumns="repeat(7, 1fr)" gap={2} mb={2}>
-        {days.map((day) => (
+        {days.map((day, idx) => (
           <Flex
-            key={day}
+            key={`${day}-${idx}`}  // or simply key={idx}
             justify="center"
             align="center"
             fontSize="xs"
@@ -376,6 +376,7 @@ const Calendar = ({ rsvps }) => {
           </Flex>
         ))}
       </Grid>
+
 
       {/* Dates */}
       <VStack spacing={1} align="stretch">
@@ -695,7 +696,7 @@ function ApplyOrganizerModal({ isOpen, onClose, onSubmitted }) {
       <Flex position="fixed" top="0" left="0" right="0" bottom="0" align="center" justify="center" zIndex="1401" p={4} onClick={onClose}>
         <Box bg="white" borderRadius="xl" maxW="600px" w="full" maxH="90vh" overflowY="auto" onClick={(e) => e.stopPropagation()}>
           <Flex justify="space-between" align="center" p={6} borderBottomWidth="1px">
-            <Heading size="lg">Apply to be an Organizer</Heading>
+            <Heading size="lg"> Apply to be an Organizer</Heading>
             <IconButton size="sm" variant="ghost" onClick={onClose} aria-label="Close" icon={<span>✕</span>} />
           </Flex>
 
@@ -975,7 +976,7 @@ React.useEffect(() => {
 
         {role === "user" && !status && (
           <Button variant="outline" colorScheme="pink" onClick={() => setOrgModalOpen(true)} size="lg" borderWidth="2px">
-            ✓ Apply to be an Event Organizer
+          ✓  Apply to be an Event Organizer
           </Button>
         )}
         {role === "user" && status && (
@@ -1103,6 +1104,12 @@ React.useEffect(() => {
           {history.map((row) => {
             const ev = unwrapEvent(row);
             const hours = typeof row.attendedHours === "number" ? row.attendedHours : Number(row.attendedHours || 0);
+             const isOrganizerConfirmed =
+              row?.confirmedByOrganizer === true ||
+              row?.organizerConfirmed === true ||
+              row?.attendanceStatus === "confirmed-by-organizer";
+
+
             return (
               <Flex key={`${ev._id || "ev"}-${row._id || row.checkOutAt || Math.random()}`} align="center" gap={4} flexWrap="wrap">
                 <Image src={ev.image || "/placeholder.png"} w="80px" h="80px" borderRadius="lg" objectFit="cover" flexShrink={0} />
@@ -1111,10 +1118,28 @@ React.useEffect(() => {
                   <Text fontSize="sm" color="gray.600">{formatDate(row.checkOutAt || ev.startAt || ev.date)}</Text>
                   <Text fontSize="sm" color="gray.500">{ev.category || ev.group}</Text>
                 </Box>
+
                 <VStack align="end" spacing={2} flexShrink={0}>
-                  <Text fontSize="sm" color="gray.600">{hours.toFixed ? hours.toFixed(1) : hours} hours</Text>
-                  <Badge colorScheme="green" fontSize="sm">Attended</Badge>
+                  <Text fontSize="sm" color="gray.600">
+                    {hours.toFixed ? hours.toFixed(1) : hours} hours
+                  </Text>
+
+                {/* Always show Attended */}
+                <Badge colorScheme="green" fontSize="sm">
+                  Attended
+                </Badge>
+
+                {/* Organizer confirmation status (always show) */}
+                <Badge
+                  colorScheme={isOrganizerConfirmed ? "purple" : "gray"}
+                  fontSize="xs"
+                  variant={isOrganizerConfirmed ? "solid" : "subtle"}
+                >
+                  {isOrganizerConfirmed ? "Organizer confirmed" : "Not yet confirmed by organizer"}
+                </Badge>
+
                 </VStack>
+
               </Flex>
             );
           })}
@@ -1137,7 +1162,7 @@ React.useEffect(() => {
                   + Create Group
                 </Button>
               )}
-              <Button colorScheme="pink" onClick={() => navigate("/groups")}>
+              <Button colorPalette="pink" onClick={() => navigate("/groups")}>
                 Explore More Groups
               </Button>
             </HStack>

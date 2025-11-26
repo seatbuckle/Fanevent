@@ -9,6 +9,7 @@ import {
   Flex,
   HStack,
   Badge,
+  Icon,
 } from "@chakra-ui/react";
 import {
   X,
@@ -127,6 +128,22 @@ function shapeNotification(n) {
         "Welcome to Fanevent! Start exploring events and fandom groups tailored for you.",
     };
   }
+
+    // Event reminders
+  if (typeStr.includes("reminder")) {
+    return {
+      ...common,
+      icon: <Calendar size={18} />,
+      color: "blue",
+      title: `Event Reminder${eventTitle ? ` · ${eventTitle}` : ""}`,
+      body:
+        common.body ||
+        (eventTitle
+          ? `Reminder: “${eventTitle}” is starting soon.`
+          : "Reminder: An event you’re attending is starting soon."),
+    };
+  }
+
 
   // Group moderation
   if (typeStr.includes("group") && typeStr.includes("warning")) {
@@ -657,16 +674,20 @@ export default function NotificationOverlay({ isOpen, onClose }) {
               >
                 Mark all read
               </Button>
-              <IconButton
-                aria-label="Close"
-                icon={<X size={18} />}
-                size="sm"
-                onClick={handleClose}
-                colorScheme="pink"
-                bg="pink.500"
-                _hover={{ bg: "pink.600" }}
-                color="white"
-              />
+<Button
+  aria-label="Close"
+  size="sm"
+  onClick={handleClose}
+  bg="pink.500"
+  _hover={{ bg: "pink.600" }}
+  color="white"
+  px={2}
+  minW="auto"
+>
+  <X size={16} />
+</Button>
+
+
             </HStack>
           </Flex>
           <Box h="1px" bg="gray.100" />

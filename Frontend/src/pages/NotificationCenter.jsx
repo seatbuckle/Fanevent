@@ -1,5 +1,16 @@
 import React from "react";
-import { Box, Container, Heading, Text, VStack, HStack, Badge, Button, Separator } from "@chakra-ui/react";
+import {
+  Box,
+  Container,
+  Heading,
+  Text,
+  VStack,
+  HStack,
+  Badge,
+  Button,
+  Separator,
+} from "@chakra-ui/react";
+
 import { api } from "@/lib/api";
 import { CheckCheck } from "lucide-react";
 import { Link } from "react-router-dom";

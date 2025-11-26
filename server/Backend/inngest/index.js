@@ -13,6 +13,76 @@ import { clerkClient as clerk } from "@clerk/express";
 // ------------------------------------------------------------------
 export const inngest = new Inngest({ id: "fanevent-app" });
 
+
+export const perMinuteReminderSweep = inngest.createFunction(
+  { id: "per-minute-reminder-sweep" },
+  { cron: "*/5 * * * *" }, // every 5 minutes
+  async () => {
+    const now = new Date();
+    const windowMinutes = 5;
+
+    const events = await Event.find({ startAt: { $gte: now } })
+      .select({ _id: 1, startAt: 1, title: 1 })
+      .lean();
+
+    const notificationsToCreate = [];
+
+    for (const ev of events) {
+      const start = new Date(ev.startAt);
+      const diffMinutes = (start.getTime() - now.getTime()) / (1000 * 60);
+
+      const reminders = await EventReminder.find({
+        eventId: ev._id,
+        offsets: {
+          $elemMatch: {
+            $gte: diffMinutes,
+            $lt: diffMinutes + windowMinutes,
+          },
+        },
+      }).lean();
+
+      for (const r of reminders) {
+        for (const offset of r.offsets) {
+          if (offset < diffMinutes || offset >= diffMinutes + windowMinutes) continue;
+
+          const exists = await Notification.exists({
+            userId: r.userId,
+            type: "EVENT_REMINDER",
+            "data.eventId": String(ev._id),
+            "data.offsetMinutes": offset,
+          });
+          if (exists) continue;
+
+          notificationsToCreate.push({
+            userId: r.userId,
+            type: "EVENT_REMINDER",
+            data: {
+              eventId: String(ev._id),
+              eventTitle: ev.title,
+              offsetMinutes: offset,
+              message: `Reminder: “${ev.title}” starts soon.`,
+            },
+            link: `/events/${ev._id}`,
+            read: false,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      }
+    }
+
+    if (notificationsToCreate.length) {
+      await Notification.collection.insertMany(notificationsToCreate);
+    }
+
+    return {
+      ok: true,
+      created: notificationsToCreate.length,
+      events: events.length,
+    };
+  }
+);
+
 // ------------------------------------------------------------------
 // Helpers (stub email – wire to Resend/Postmark/SES later)
 // ------------------------------------------------------------------
@@ -233,4 +303,5 @@ export const functions = [
   onAnnouncement,
   eventReminder,
   weeklyDigest,
+  perMinuteReminderSweep,
 ];
