@@ -1539,7 +1539,7 @@ const notifyEventUpdated = async (eventId, title, attendeeIds = []) => {
               size="sm"
               onClick={() => handleReportAction("warn-sender", report)}
             >
-              Warn Sender
+              {report.targetId === report.messageSenderId ? "Warn User" : "Warn Group"}
             </Button>
             <Button
               variant="link"

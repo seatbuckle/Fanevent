@@ -9,7 +9,22 @@
 * {
   font-family: "Inter", sans-serif;
   scrollbar-width: thin;
-  scrollbar-color: #787777 #1e1e1e;
+  /* thumb color, track color (Firefox) */
+  scrollbar-color: var(--color-primary) transparent;
+}
+
+/* WebKit browsers: custom scrollbar styling */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-primary);
+  border-radius: 8px;
+  border: 2px solid transparent; /* spacing */
 }
 
 body {

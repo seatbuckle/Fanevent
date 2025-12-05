@@ -1,5 +1,6 @@
 // server/controllers/groups.controller.js
 import Group from "../Backend/models/Groups.js";
+import Conversation from "../Backend/models/Conversation.js";
 
 
 const isAdminReq = (req) => Boolean(req.isAdmin === true || req.userRole === "admin");
@@ -125,6 +126,21 @@ export async function joinGroup(req, res, next) {
     await g.updateOne({ $addToSet: { members: userId } });
     const updated = await Group.findById(g._id).lean();
 
+    // If there's a conversation for this group, add the user to it
+    try {
+      const conv = await Conversation.findOne({ groupId: g._id });
+      if (conv) {
+        // add participant if not already present
+        if (!conv.participants.includes(userId)) {
+          conv.participants.push(userId);
+          await conv.save();
+        }
+      }
+    } catch (err) {
+      // don't block the join if conversation update fails
+      console.error('Failed to sync group join to conversation:', err.message || err);
+    }
+
     return res.json({
       ...updated,
       membersCount: Array.isArray(updated.members) ? updated.members.length : 0,
@@ -146,6 +162,20 @@ export async function leaveGroup(req, res, next) {
 
     await g.updateOne({ $pull: { members: userId } });
     const updated = await Group.findById(g._id).lean();
+
+    // If there's a conversation for this group, remove the user from it
+    try {
+      const conv = await Conversation.findOne({ groupId: g._id });
+      if (conv) {
+        const idx = conv.participants.indexOf(userId);
+        if (idx !== -1) {
+          conv.participants.splice(idx, 1);
+          await conv.save();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to sync group leave to conversation:', err.message || err);
+    }
 
     return res.json({
       ...updated,

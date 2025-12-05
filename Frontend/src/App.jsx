@@ -17,6 +17,7 @@ import AllResults from "./pages/AllResults";
 import OrganizerDashboard from "./pages/OrganizerDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminApplications from "./pages/admin/AdminApplications";
+import Messages from "./pages/Messages";
 import RequireRole from "./components/auth/RequireRole";
 import { useRoleStore } from "./store/useRoleStore";
 import NotificationCenter from "@/pages/NotificationCenter";
@@ -47,6 +48,7 @@ function UserRoutes() {
         <Route path="/groups" element={<Groups />} />
         <Route path="/my-dashboard" element={<MyDashboard />} />
         <Route path="/notifications" element={<NotificationCenter />} />
+        <Route path="/messages" element={<Messages />} />
 
         {/* Block privileged areas */}
         <Route path="/organizer" element={<Navigate to="/" replace />} />
@@ -72,6 +74,7 @@ function OrganizerRoutes() {
         <Route path="/groups/:id" element={<GroupDetails />} />
         <Route path="/my-dashboard" element={<MyDashboard />} />
         <Route path="/notifications" element={<NotificationCenter />} />
+        <Route path="/messages" element={<Messages />} />
 
         {/* Protected organizer page */}
         <Route
@@ -106,6 +109,7 @@ function AdminRoutes() {
         <Route path="/groups/:id" element={<GroupDetails />} />
         <Route path="/my-dashboard" element={<MyDashboard />} />
         <Route path="/notifications" element={<NotificationCenter />} />
+        <Route path="/messages" element={<Messages />} />
 
         {/* Organizer page still allowed only to organizers, so redirect admins away */}
         <Route path="/organizer" element={<Navigate to="/" replace />} />

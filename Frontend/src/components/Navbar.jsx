@@ -219,6 +219,18 @@ const Navbar = () => {
           >
             <Bell size={20} />
           </IconButton>
+
+          <IconButton
+            variant="ghost"
+            color="#99A0A8"
+            aria-label="Messages"
+            _hover={{ bg: 'gray.100' }}
+            _focus={{ boxShadow: 'none' }}
+            _active={{ boxShadow: 'none' }}
+            onClick={() => { if (user) navigate('/messages'); else openSignIn(); }}
+          >
+            <MessageSquare size={20} />
+          </IconButton>
   <NotificationOverlay isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} />
 
           <SignedOut>

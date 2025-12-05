@@ -72,6 +72,31 @@ const reportSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    messageId: {
+      type: String,
+      default: null,
+    },
+    messageBody: {
+      type: String,
+      default: null,
+    },
+    conversationId: {
+      type: String,
+      default: null,
+    },
+    messageSenderId: {
+      type: String,
+      default: null,
+    },
+    messageSenderName: {
+      type: String,
+      default: null,
+    },
+    messageCreatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

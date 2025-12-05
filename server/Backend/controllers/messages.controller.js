@@ -1,17 +1,37 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import Group from "../models/Groups.js";
+import { clerkClient as clerk } from "@clerk/express";
 
 // Create or return an existing conversation
 export async function getOrCreateConversation(req, res) {
   try {
-    const { participants = [], title } = req.body;
+    const { participants = [], title, groupId } = req.body;
 
-    // Check for at least two participants
+    // If groupId provided, try to find or create a conversation tied to that group
+    if (groupId) {
+      // find existing conversation for this group
+      const existing = await Conversation.findOne({ groupId });
+      if (existing) return res.json({ ok: true, conversation: existing });
+
+      // load group and its members
+      const g = await Group.findById(groupId).lean();
+      if (!g) return res.status(404).json({ ok: false, message: 'Group not found' });
+      const members = Array.isArray(g.members) ? g.members.filter(Boolean) : [];
+      if (members.length < 1) {
+        return res.status(400).json({ ok: false, message: 'Group has no members' });
+      }
+
+      const convo = await Conversation.create({ participants: members, title: g.name || title || undefined, groupId });
+      return res.json({ ok: true, conversation: convo });
+    }
+
+    // Otherwise, create conversation from participants array
     if (!Array.isArray(participants) || participants.length < 2) {
       return res.status(400).json({ ok: false, message: "participants (array of user ids) required" });
     }
 
-    // Try to find an existing conversation
+    // Try to find an existing conversation with same participants
     const query = { participants: { $size: participants.length, $all: participants } };
     const existing = await Conversation.findOne(query);
     if (existing) {
@@ -65,7 +85,22 @@ export async function getMessages(req, res) {
     }
 
     const messages = await Message.find(query).sort({ createdAt: -1 }).limit(limit).lean();
-    return res.json({ ok: true, messages });
+     
+      const fromIds = Array.from(new Set(messages.map((m) => m.from).filter(Boolean)));
+      const userMap = {};
+      await Promise.all(fromIds.map(async (uid) => {
+        try {
+          const u = await clerk.users.getUser(uid);
+          const name = [u?.firstName, u?.lastName].filter(Boolean).join(' ') || u?.username || '';
+          const image = u?.profileImageUrl || u?.imageUrl || (u?.image && u.image.url) || '';
+          userMap[uid] = { id: uid, name, image };
+        } catch (e) {
+          userMap[uid] = { id: uid, name: '', image: '' };
+        }
+      }));
+
+      const enriched = messages.map((m) => ({ ...m, sender: userMap[m.from] || null }));
+      return res.json({ ok: true, messages: enriched });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ ok: false, message: 'Failed to fetch messages' });
@@ -94,8 +129,16 @@ export async function sendMessage(req, res) {
       { $set: { lastMessage: message._id }, $inc: incUpdates },
       { new: true }
     );
+    // attach sender profile
+    let sender = null;
+    try {
+      const u = await clerk.users.getUser(from);
+      const name = [u?.firstName, u?.lastName].filter(Boolean).join(' ') || u?.username || '';
+      const image = u?.profileImageUrl || u?.imageUrl || '';
+      sender = { id: from, name, image };
+    } catch (e) {}
 
-    return res.json({ ok: true, message });
+    return res.json({ ok: true, message: { ...message.toObject(), sender } });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ ok: false, message: 'Failed to send message' });

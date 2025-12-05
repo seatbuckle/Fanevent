@@ -6,7 +6,8 @@ const ConversationSchema = new Schema(
   {
     // Clerk user ids
     participants: [{ type: String, required: true}],
-
+   
+    groupId: { type: Schema.Types.ObjectId, ref: "Group", index: true },
     lastMessage: { type: Schema.Types.ObjectId, ref: "Message" },
 
     unread: {

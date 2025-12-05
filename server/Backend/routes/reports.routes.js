@@ -99,8 +99,17 @@ router.post("/", requireAuth, async (req, res) => {
     }
     const { name, email } = await safeGetUserProfile(userId);
 
-    // Create report
-    const report = await Report.create({
+    // Create report (allow extra message metadata when reporting messages)
+    const {
+      messageId,
+      messageBody,
+      conversationId,
+      messageSenderId,
+      messageSenderName,
+      messageCreatedAt,
+    } = req.body;
+
+    const reportData = {
       reportCategory,
       reporterClerkId: userId,
       reporterName: name || "Anonymous",
@@ -110,7 +119,18 @@ router.post("/", requireAuth, async (req, res) => {
       targetName,
       reason: trimmed,
       status: "Open",
-    });
+    };
+
+    if (reportType === 'Message') {
+      if (messageId) reportData.messageId = String(messageId);
+      if (messageBody) reportData.messageBody = String(messageBody).slice(0, 2000);
+      if (conversationId) reportData.conversationId = String(conversationId);
+      if (messageSenderId) reportData.messageSenderId = String(messageSenderId);
+      if (messageSenderName) reportData.messageSenderName = String(messageSenderName);
+      if (messageCreatedAt) reportData.messageCreatedAt = new Date(messageCreatedAt);
+    }
+
+    const report = await Report.create(reportData);
 
     return res.status(201).json({
       success: true,
