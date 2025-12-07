@@ -2033,6 +2033,36 @@ const notifyEventUpdated = async (eventId, title, attendeeIds = []) => {
                 variant="outline"
                 size="sm"
                 borderRadius="lg"
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/export/users', {
+                      credentials: 'include',
+                      headers: {
+                        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+                      }
+                    });
+                    if (!response.ok) throw new Error('Export failed');
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `users-export-${Date.now()}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    toast.success('Users exported successfully');
+                  } catch (err) {
+                    toast.error('Failed to export users');
+                  }
+                }}
+              >
+                Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                borderRadius="lg"
                 onClick={() => setUsersPage((p) => Math.max(1, p - 1))}
                 isDisabled={currentUsersPage <= 1}
               >
@@ -2476,6 +2506,36 @@ const notifyEventUpdated = async (eventId, title, attendeeIds = []) => {
                 variant="outline"
                 size="sm"
                 borderRadius="lg"
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/export/groups', {
+                      credentials: 'include',
+                      headers: {
+                        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+                      }
+                    });
+                    if (!response.ok) throw new Error('Export failed');
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `groups-export-${Date.now()}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    toast.success('Groups exported successfully');
+                  } catch (err) {
+                    toast.error('Failed to export groups');
+                  }
+                }}
+              >
+                Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                borderRadius="lg"
                 onClick={loadDashboardData}
               >
                 Refresh
@@ -2906,6 +2966,36 @@ const notifyEventUpdated = async (eventId, title, attendeeIds = []) => {
                 variant="outline"
                 size="sm"
                 borderRadius="lg"
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/export/events', {
+                      credentials: 'include',
+                      headers: {
+                        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+                      }
+                    });
+                    if (!response.ok) throw new Error('Export failed');
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `events-export-${Date.now()}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    toast.success('Events exported successfully');
+                  } catch (err) {
+                    toast.error('Failed to export events');
+                  }
+                }}
+              >
+                Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                borderRadius="lg"
                 onClick={loadDashboardData}
               >
                 Refresh
@@ -3228,6 +3318,36 @@ const notifyEventUpdated = async (eventId, title, attendeeIds = []) => {
                 : "No reports"}
             </Text>
             <HStack>
+              <Button
+                variant="outline"
+                size="sm"
+                borderRadius="lg"
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/export/reports', {
+                      credentials: 'include',
+                      headers: {
+                        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+                      }
+                    });
+                    if (!response.ok) throw new Error('Export failed');
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `reports-export-${Date.now()}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    toast.success('Reports exported successfully');
+                  } catch (err) {
+                    toast.error('Failed to export reports');
+                  }
+                }}
+              >
+                Export CSV
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

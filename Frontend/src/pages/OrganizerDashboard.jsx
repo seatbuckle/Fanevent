@@ -1726,9 +1726,38 @@ const confirmAttendance = async (attendee) => {
         {/* ======================= My Events ======================= */}
         {activeTab === "my-events" && (
           <Card>
-            <Heading size="md" mb={5}>
-              My Events
-            </Heading>
+            <Flex justify="space-between" align="center" mb={5} flexWrap="wrap" gap={3}>
+              <Heading size="md">My Events</Heading>
+              <Button
+                variant="outline"
+                rounded="full"
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/export/organizer/events', {
+                      credentials: 'include',
+                      headers: {
+                        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+                      }
+                    });
+                    if (!response.ok) throw new Error('Export failed');
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `my-events-export-${Date.now()}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    toast.success('Events exported successfully');
+                  } catch (err) {
+                    toast.error('Failed to export events');
+                  }
+                }}
+              >
+                Export CSV
+              </Button>
+            </Flex>
 
             {/* Desktop header row */}
             <Grid
@@ -1860,9 +1889,38 @@ const confirmAttendance = async (attendee) => {
         {/* ======================= Attendees ======================= */}
         {activeTab === "attendees" && (
           <Card>
-            <Heading size="md" mb={5}>
-              Manage Attendees
-            </Heading>
+            <Flex justify="space-between" align="center" mb={5} flexWrap="wrap" gap={3}>
+              <Heading size="md">Manage Attendees</Heading>
+              <Button
+                variant="outline"
+                rounded="full"
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/export/organizer/attendees', {
+                      credentials: 'include',
+                      headers: {
+                        'Authorization': `Bearer ${await window.Clerk.session.getToken()}`
+                      }
+                    });
+                    if (!response.ok) throw new Error('Export failed');
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `attendees-export-${Date.now()}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    toast.success('Attendees exported successfully');
+                  } catch (err) {
+                    toast.error('Failed to export attendees');
+                  }
+                }}
+              >
+                Export CSV
+              </Button>
+            </Flex>
 
             <Flex gap={3} mb={5} flexWrap="wrap">
               <Box position="relative" flex="1" minW="260px">

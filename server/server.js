@@ -30,6 +30,7 @@ import healthRouter from "./Backend/routes/health.js";
 import notificationPreferences from "./Backend/routes/notificationPreferences.js"
 import eventReminderRoutes from './Backend/routes/eventReminders.js';
 import messagesRouter from './Backend/routes/messages.routes.js';
+import exportRouter from './Backend/routes/export.routes.js';
 
 const app = express();
 
@@ -265,6 +266,7 @@ app.use('/api/messages', messagesRouter);
 app.use("/api", healthRouter);
 app.use("/api/notification-preferences", notificationPreferences);
 app.use("/api/event-reminders", eventReminderRoutes);
+app.use('/api/export', exportRouter);
 
 
 // ==================================================================
