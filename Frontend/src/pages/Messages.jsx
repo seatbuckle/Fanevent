@@ -147,44 +147,58 @@ export default function Messages() {
   async function loadConversations() {
     setLoadingConvos(true);
     try {
-      // load user's groups instead of existing conversations
-      const res = await api('/api/groups/me/mine', { auth: 'required' });
-      const items = res.items || [];
-      // normalize groups as conversation-like items
-      const groups = items.map(g => ({
+      // fetch group chats
+/*       const groupRes = await api('/api/groups/me/mine', { auth: 'required' });
+      const groupItems = groupRes.items || [];
+      const groups = groupItems.map(g => ({
         _id: g._id,
         title: g.name,
-        name: g.name,
         members: g.members || [],
         updatedAt: g.updatedAt,
         lastMessage: g.lastMessage || null,
         isGroup: true,
       }));
+ */
+      // fetch private conversations 
+      const convoRes = await api('/api/messages/conversations', { auth: 'required' });
+      const convos = (convoRes.conversations || []).map(c => ({
 
+        _id: c._id?.$oid || c._id,
+        title: c.title || "Conversation",
+        members: c.participants || [],
+        updatedAt: c.updatedAt?.$date || c.updatedAt,
+        lastMessage: c.lastMessage || null,
+        isGroup: false,
+      }));
+
+      /* const filteredGroups = groups.filter(g => {
+        return !convos.some(c => c.isGroup && c._id === g._id);
+      }); */
+
+      // let all = [...filteredGroups, ...convos];
+      let all = [...convos];
+
+      // dev
       if (process.env.NODE_ENV !== 'production') {
-        const devGroups = [];
         for (let i = 1; i <= 5; i++) {
-          devGroups.push({
+          all.push({
             _id: `dev-group-${i}`,
             title: `Test Group ${i}`,
-            name: `Test Group ${i}`,
             members: [],
             updatedAt: new Date(Date.now() - i * 60000).toISOString(),
-            lastMessage: { body: `Welcome to Test Group ${i}` },
             isGroup: true,
           });
         }
-        setConversations([...(groups || []), ...devGroups]);
-        return;
       }
 
-      setConversations(groups || []);
+      setConversations(all);
     } catch (err) {
-      console.error('Failed to load conversations', err);
+      console.error("Failed to load conversations", err);
     } finally {
       setLoadingConvos(false);
     }
   }
+
 
   async function loadMessages(conversationId) {
     setLoadingMessages(true);
@@ -259,8 +273,19 @@ export default function Messages() {
                       console.error('Failed to create/get conversation for group', err);
                     }
                   } else {
-                    await loadMessages(c._id || c.id);
+                    const convo = await api('/api/messages/conversations', {
+                      method: 'POST',
+                      auth: 'required',
+                      body: {
+                        participants: c.members
+                      }
+                    });
+
+                    const id = convo.conversation._id?.$oid || convo.conversation._id;
+                    setSelectedConv(id);
+                    await loadMessages(id);
                   }
+
                 }} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                   <div style={{ width: 32, height: 32, borderRadius: 16, background: '#EEE', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
                     {((c.title || c.name || '')).split(' ').map(n => n[0]).slice(0, 2).join('')}
@@ -309,9 +334,9 @@ export default function Messages() {
                             <div style={{ fontSize: 15, marginBottom: 6 }}>{m.body || m.text || m.message || '(empty)'}</div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <div style={{ fontSize: 11, color: '#FFF', opacity: 0.85, whiteSpace: 'nowrap' }}>{timeText}</div>
-                                {hoveredMessageId === (m._id || m.id) && reportingMessageId !== (m._id || m.id) && (
-                                  <button onClick={() => setReportingMessageId(m._id || m.id)} style={{ background: 'transparent', border: 'none', color: '#FCE7F3', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Report</button>
-                                )}
+                              {hoveredMessageId === (m._id || m.id) && reportingMessageId !== (m._id || m.id) && (
+                                <button onClick={() => setReportingMessageId(m._id || m.id)} style={{ background: 'transparent', border: 'none', color: '#FCE7F3', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Report</button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -342,9 +367,9 @@ export default function Messages() {
                       {reportingMessageId === (m._id || m.id) && (
                         <div style={{ display: 'flex', gap: 6, position: 'absolute', right: 0, top: 40, zIndex: 1000, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 4px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
                           <button onClick={() => reportMessage(m, 'user')} style={{ background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '6px 10px', borderRadius: 5, cursor: 'pointer', color: '#000', fontSize: 11, whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 500 }}>Report User</button>
-                                {conversations.find(c => (c._id || c.id) === selectedConv || c._conversationId === selectedConv)?.isGroup && (
-                                  <button onClick={() => reportMessage(m, 'group')} style={{ background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '6px 10px', borderRadius: 5, cursor: 'pointer', color: '#000', fontSize: 11, whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 500 }}>Report Group</button>
-                                )}
+                          {conversations.find(c => (c._id || c.id) === selectedConv || c._conversationId === selectedConv)?.isGroup && (
+                            <button onClick={() => reportMessage(m, 'group')} style={{ background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '6px 10px', borderRadius: 5, cursor: 'pointer', color: '#000', fontSize: 11, whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 500 }}>Report Group</button>
+                          )}
                           <button onClick={() => setReportingMessageId(null)} style={{ background: 'transparent', border: '1px solid #D1D5DB', color: '#6B7280', cursor: 'pointer', fontSize: 11, padding: '6px 10px', whiteSpace: 'nowrap', borderRadius: 5, transition: 'all 0.2s' }}>Cancel</button>
                         </div>
                       )}

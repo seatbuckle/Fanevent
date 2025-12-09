@@ -66,8 +66,8 @@ const normalizeEvent = (raw = {}) => {
       typeof raw.attendeesCount === "number"
         ? raw.attendeesCount
         : typeof raw.rsvpCount === "number"
-        ? raw.rsvpCount
-        : 0,
+          ? raw.rsvpCount
+          : 0,
     status: raw.status || "approved",
     createdBy: raw.createdBy,
   };
@@ -150,48 +150,48 @@ function RSVPCalendarMini({ rsvps, loading }) {
   const today = React.useMemo(() => new Date(), []);
   const todayKey = React.useMemo(() => toDateKey(today), [today]);
 
-const parsedEvents = React.useMemo(() => {
-  if (!Array.isArray(rsvps)) return [];
+  const parsedEvents = React.useMemo(() => {
+    if (!Array.isArray(rsvps)) return [];
 
-  const parsed = rsvps
-    .map((row) => {
-      // Try to unwrap a nested event, but keep the row handy too
-      const ev = unwrapEvent(row);
+    const parsed = rsvps
+      .map((row) => {
+        // Try to unwrap a nested event, but keep the row handy too
+        const ev = unwrapEvent(row);
 
-      // Try a bunch of common field names on BOTH row and ev
-      const when =
-        row.startAt ||
-        row.date ||
-        row.startsAt ||
-        row.startDate ||
-        row.eventDate ||
-        row.when ||
-        ev?.startAt ||
-        ev?.date ||
-        ev?.startsAt ||
-        ev?.startDate ||
-        ev?.eventDate ||
-        ev?.when;
+        // Try a bunch of common field names on BOTH row and ev
+        const when =
+          row.startAt ||
+          row.date ||
+          row.startsAt ||
+          row.startDate ||
+          row.eventDate ||
+          row.when ||
+          ev?.startAt ||
+          ev?.date ||
+          ev?.startsAt ||
+          ev?.startDate ||
+          ev?.eventDate ||
+          ev?.when;
 
-      if (!when) return null;
+        if (!when) return null;
 
-      const d = new Date(when);
-      if (Number.isNaN(d.getTime())) return null;
+        const d = new Date(when);
+        if (Number.isNaN(d.getTime())) return null;
 
-      return {
-        row,
-        ev,
-        date: d,
-        key: toDateKey(d),
-      };
-    })
-    .filter((x) => x && x.key);
+        return {
+          row,
+          ev,
+          date: d,
+          key: toDateKey(d),
+        };
+      })
+      .filter((x) => x && x.key);
 
-  // DEBUG: see what the calendar thinks your events are
-  console.log("Mini calendar parsedEvents:", parsed);
+    // DEBUG: see what the calendar thinks your events are
+    console.log("Mini calendar parsedEvents:", parsed);
 
-  return parsed;
-}, [rsvps]);
+    return parsed;
+  }, [rsvps]);
 
 
   // map YYYY-MM-DD -> count
@@ -652,47 +652,47 @@ export default function EventDetails() {
   }, [id, user?.id]);
 
 
-useEffect(() => {
-  if (!user?.id) {
-    setMyRsvps([]);
-    return;
-  }
-
-  let cancelled = false;
-
-  const loadRsvps = async () => {
-    setLoadingRsvpCalendar(true);
-    try {
-      const res = await api("/api/me/rsvps");
-
-      let list = [];
-      if (Array.isArray(res)) list = res;
-      else if (Array.isArray(res?.items)) list = res.items;
-      else if (Array.isArray(res?.rsvps)) list = res.rsvps;
-      else if (Array.isArray(res?.data)) list = res.data;
-      else if (Array.isArray(res?.rows)) list = res.rows;
-
-      if (!cancelled) {
-        setMyRsvps(list);
-        // temporary debug:
-        console.log("RSVP calendar raw:", res);
-        console.log("RSVP calendar list:", list);
-      }
-    } catch (e) {
-      if (!cancelled) {
-        console.error("Failed to load RSVPs", e);
-        setMyRsvps([]);
-      }
-    } finally {
-      if (!cancelled) setLoadingRsvpCalendar(false);
+  useEffect(() => {
+    if (!user?.id) {
+      setMyRsvps([]);
+      return;
     }
-  };
 
-  loadRsvps();
-  return () => {
-    cancelled = true;
-  };
-}, [user?.id]);
+    let cancelled = false;
+
+    const loadRsvps = async () => {
+      setLoadingRsvpCalendar(true);
+      try {
+        const res = await api("/api/me/rsvps");
+
+        let list = [];
+        if (Array.isArray(res)) list = res;
+        else if (Array.isArray(res?.items)) list = res.items;
+        else if (Array.isArray(res?.rsvps)) list = res.rsvps;
+        else if (Array.isArray(res?.data)) list = res.data;
+        else if (Array.isArray(res?.rows)) list = res.rows;
+
+        if (!cancelled) {
+          setMyRsvps(list);
+          // temporary debug:
+          console.log("RSVP calendar raw:", res);
+          console.log("RSVP calendar list:", list);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          console.error("Failed to load RSVPs", e);
+          setMyRsvps([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingRsvpCalendar(false);
+      }
+    };
+
+    loadRsvps();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
 
   // --------- actions (DB-only) ----------
@@ -801,7 +801,7 @@ useEffect(() => {
       setCheckOutLoading(false);
     }
   };
-  
+
 
   const handleShare = async () => {
     try {
@@ -1137,11 +1137,11 @@ useEffect(() => {
                     )}
                   </Flex>
 
-                                    {/* LIKE / RSVP / CHECK-IN SECTION */}
+                  {/* LIKE / RSVP / CHECK-IN SECTION */}
                   <Flex gap={3} mb={6} flexWrap="wrap">
                     {/* ...all your buttons... */}
                   </Flex>
-                  
+
                   <Flex gap={3} mb={6} flexWrap="wrap">
                     {userHasRSVP && (
                       <EventReminderControls eventId={event._id} />
@@ -1157,15 +1157,15 @@ useEffect(() => {
                         <Text fontWeight="medium" fontSize="sm">
                           {event.startAt
                             ? new Date(event.startAt).toLocaleDateString("en-US", {
-                                weekday: "long",
-                                month: "long",
-                                day: "numeric",
-                                year: "numeric",
-                              })
+                              weekday: "long",
+                              month: "long",
+                              day: "numeric",
+                              year: "numeric",
+                            })
                             : "TBD"}
                         </Text>
                         <Text fontSize="xs" color="gray.600">
-                                                    {event.endAt
+                          {event.endAt
                             ? `Starts ${new Date(event.startAt).toLocaleTimeString()}  |  `
                             : ""}
                           {event.endAt
@@ -1300,10 +1300,10 @@ useEffect(() => {
 
             {/* RIGHT SIDEBAR — Calendar, Media, Share/Contact, Hosted By */}
             <Box w={{ base: "100%", lg: "340px" }}>
-            {/* RSVP-aware Calendar (same footprint) */}
-            <Box bg="white" borderRadius="2xl" p={6} mb={6} boxShadow="sm">
-              <RSVPCalendarMini rsvps={myRsvps} loading={loadingRsvpCalendar} />
-            </Box>
+              {/* RSVP-aware Calendar (same footprint) */}
+              <Box bg="white" borderRadius="2xl" p={6} mb={6} boxShadow="sm">
+                <RSVPCalendarMini rsvps={myRsvps} loading={loadingRsvpCalendar} />
+              </Box>
 
 
               {/* MEDIA PREVIEW BOX */}
@@ -1422,14 +1422,46 @@ useEffect(() => {
                   <Button
                     flex={1}
                     variant="outline"
-                    onClick={() => toast("Contact form coming soon")}
                     _hover={{ bg: "gray.50" }}
                     color="pink.500"
+                    onClick={async () => {
+                      if (!user) return openSignIn();
+
+                      try {
+                        // POST to create OR get existing convo
+                        const res = await api("/api/messages/conversations", {
+                          method: "POST",
+                          body: { participants: [user.id, event.createdBy],
+                                  title: `Chat about ${event.title}`
+                           },
+                          auth: "required"
+                        });
+
+                        const convo =
+                          res?.conversation ||
+                          res?.data?.conversation ||
+                          res?.convo ||
+                          res;
+
+                        const id = convo?._id || convo?.id;
+                        if (!id) {
+                          console.error("Create conversation response:", res);
+                          return toast.error("Conversation created, but no ID returned.");
+                        }
+
+                        navigate(`/messages`);
+                      } catch (e) {
+                        console.error(e);
+                        toast.error("Could not start a conversation");
+                      }
+                    }}
                   >
                     <MessageSquare size={18} style={{ marginRight: 8 }} /> Contact
                   </Button>
+
                 </Flex>
               </Box>
+
 
               {/* HOSTED BY */}
               <Box bg="white" borderRadius="2xl" p={6} mb={6} boxShadow="sm">
@@ -1553,7 +1585,7 @@ useEffect(() => {
                 const isVideo = media.type === "video" || media.type === "youtube";
                 const thumb = isVideo
                   ? getVideoThumb(media.url) ||
-                    mediaGallery.find((m) => m.type === "image")?.url
+                  mediaGallery.find((m) => m.type === "image")?.url
                   : media.url;
                 return (
                   <Box
