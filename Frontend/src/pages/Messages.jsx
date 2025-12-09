@@ -41,12 +41,11 @@ export default function Messages() {
     return `${date} ${hours}:${minutes} ${ampm}`;
   }
 
-  // Helper to generate fake messages for dev/testing
   function generateDevMessages(conversationId, count = 50) {
     const now = Date.now();
     const msgs = [];
     for (let i = 0; i < count; i++) {
-      const isMine = i % 3 === 0; // some outgoing, some incoming
+      const isMine = i % 3 === 0;
       msgs.push({
         _id: `${conversationId}-msg-${i}`,
         body: `${isMine ? "You" : "Alice"}: Sample message #${i + 1} for ${conversationId}`,
@@ -67,22 +66,22 @@ export default function Messages() {
   const [hoveredMessageId, setHoveredMessageId] = React.useState(null);
   const [reportingMessageId, setReportingMessageId] = React.useState(null);
 
-  // Auto-scroll messages to bottom when messages change or when switching conversations
+
   React.useEffect(() => {
     try {
       const el = messagesListRef.current;
       if (el) {
-        // small timeout to allow DOM to render
+
         setTimeout(() => { el.scrollTop = el.scrollHeight; }, 50);
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) { }
   }, [messages, selectedConv]);
 
-  // Report a message (quick flow: prompt for category and reason)
+  // Report a message
   async function reportMessage(m, targetChoice = 'user') {
     if (!isSignedIn) { openSignIn(); return; }
     try {
-      const conv = conversations.find(c => (c._id||c.id) === selectedConv) || {};
+      const conv = conversations.find(c => (c._id || c.id) === selectedConv || c._conversationId === selectedConv) || {};
       const fromId = m.from || m.fromId || (m.sender && m.sender.id);
       const sender = m.sender || { id: fromId, name: '' };
 
@@ -104,7 +103,7 @@ export default function Messages() {
         return;
       }
 
-      const reason = window.prompt('Please describe why you are reporting this message (min 10 chars):', (m.body||m.text||m.message||'').slice(0,200));
+      const reason = window.prompt('Please describe why you are reporting this message (min 10 chars):', (m.body || m.text || m.message || '').slice(0, 200));
       if (!reason || reason.trim().length < 10) {
         alert('Report reason must be at least 10 characters.');
         return;
@@ -161,7 +160,7 @@ export default function Messages() {
         lastMessage: g.lastMessage || null,
         isGroup: true,
       }));
-      // In development, append dummy conversations for testing so dev groups are always visible
+
       if (process.env.NODE_ENV !== 'production') {
         const devGroups = [];
         for (let i = 1; i <= 5; i++) {
@@ -222,61 +221,61 @@ export default function Messages() {
       <Heading mb={6} size="lg">Messages</Heading>
 
       <Grid templateColumns={{ base: "1fr", md: "320px 1fr" }} gap={6}>
-        {/* Conversations list (left column) */}
+        { }
         <Box borderWidth="1px" borderColor="gray.100" rounded="xl" overflow="hidden" bg="white">
           <Box p={4} borderBottom="1px solid" borderColor="gray.100">
-            <div style={{display: 'flex', alignItems: 'center'}}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
               <Heading size="sm">Conversations</Heading>
-              <div style={{flex: 1}} />
+              <div style={{ flex: 1 }} />
             </div>
           </Box>
 
           {loadingConvos ? (
             <Box p={6} textAlign="center"><Spinner /></Box>
           ) : (
-            <div ref={convListRef} style={{maxHeight:520, overflowY:'auto'}}>
+            <div ref={convListRef} style={{ maxHeight: 520, overflowY: 'auto' }}>
               {conversations.map((c) => (
-                  <div key={c._id || c.id} onClick={async () => {
-                    // dev-mode: handle fake dev-group ids locally
-                    if (String(c._id || '').startsWith('dev-group-')) {
-                      const convoId = c._id;
-                      setSelectedConv(convoId);
-                      // generate many messages so we can test message-list scrolling
-                      setMessages(generateDevMessages(convoId, 80));
-                      return;
-                    }
+                <div key={c._id || c.id} onClick={async () => {
 
-                    // if this is a group, create/get conversation for the group first
-                    if (c.isGroup) {
-                      try {
-                        const cc = await api('/api/messages/conversations', { method: 'POST', body: { groupId: c._id }, auth: 'required' });
-                        const convo = cc.conversation;
-                        if (convo && convo._id) {
-                          // store convo id on the group item for later
-                          c._conversationId = convo._id;
-                          await loadMessages(convo._id);
-                        }
-                      } catch (err) {
-                        console.error('Failed to create/get conversation for group', err);
+                  if (String(c._id || '').startsWith('dev-group-')) {
+                    const convoId = c._id;
+                    setSelectedConv(convoId);
+
+                    setMessages(generateDevMessages(convoId, 80));
+                    return;
+                  }
+
+
+                  if (c.isGroup) {
+                    try {
+                      const cc = await api('/api/messages/conversations', { method: 'POST', body: { groupId: c._id }, auth: 'required' });
+                      const convo = cc.conversation;
+                      if (convo && convo._id) {
+
+                        c._conversationId = convo._id;
+                        await loadMessages(convo._id);
                       }
-                    } else {
-                      await loadMessages(c._id || c.id);
+                    } catch (err) {
+                      console.error('Failed to create/get conversation for group', err);
                     }
-                  }} style={{cursor:'pointer', display:'flex', alignItems:'center', padding:'12px 16px', borderBottom:'1px solid rgba(0,0,0,0.06)'}}>
-                  <div style={{width:32, height:32, borderRadius:16, background:'#EEE', display:'flex', alignItems:'center', justifyContent:'center', marginRight:12}}>
-                    {((c.title || c.name || '')).split(' ').map(n => n[0]).slice(0,2).join('')}
+                  } else {
+                    await loadMessages(c._id || c.id);
+                  }
+                }} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 16, background: '#EEE', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                    {((c.title || c.name || '')).split(' ').map(n => n[0]).slice(0, 2).join('')}
                   </div>
-                  <div style={{flex:1}}>
-                    <div style={{display:'flex', alignItems:'center'}}>
-                      <div style={{fontWeight:600}}>{c.title || c.name || 'Conversation'}</div>
-                      <div style={{marginLeft:'auto', display:'flex', alignItems:'center', gap:8}}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <div style={{ fontWeight: 600 }}>{c.title || c.name || 'Conversation'}</div>
+                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
                         {c.unread && c.unread > 0 && (
-                          <div style={{background:'#FCE7F3', color:'#C026D3', padding:'4px 8px', borderRadius:999}}>{/* if unread is object, try fallback */}{typeof c.unread === 'number' ? c.unread : (c.unread?.total || 1)}</div>
+                          <div style={{ background: '#FCE7F3', color: '#C026D3', padding: '4px 8px', borderRadius: 999 }}>{ }{typeof c.unread === 'number' ? c.unread : (c.unread?.total || 1)}</div>
                         )}
-                        <div style={{fontSize:12, color:'#6B7280'}}>{new Date(c.updatedAt || Date.now()).toLocaleString()}</div>
+                        <div style={{ fontSize: 12, color: '#6B7280' }}>{new Date(c.updatedAt || Date.now()).toLocaleString()}</div>
                       </div>
                     </div>
-                    <div style={{fontSize:14, color:'#4B5563', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:220}}>{(c.lastMessage?.body || c.last || '').slice(0,120)}</div>
+                    <div style={{ fontSize: 14, color: '#4B5563', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>{(c.lastMessage?.body || c.last || '').slice(0, 120)}</div>
                   </div>
                 </div>
               ))}
@@ -284,17 +283,17 @@ export default function Messages() {
           )}
         </Box>
 
-        {/* Right column: messages panel */}
+        { }
         <Box borderWidth="1px" borderColor="gray.100" rounded="xl" overflow="hidden" bg="white" minH="420px" display="flex" flexDirection="column">
           <Box p={4} borderBottom="1px solid" borderColor="gray.100">
-            <Heading size="sm">{selectedConv ? (conversations.find(c => (c._id||c.id) === selectedConv)?.title || 'Conversation') : 'No conversation selected'}</Heading>
+            <Heading size="sm">{selectedConv ? (conversations.find(c => (c._id || c.id) === selectedConv)?.title || 'Conversation') : 'No conversation selected'}</Heading>
           </Box>
 
-          <Box p={4} flexGrow={1} overflowY="auto" ref={messagesListRef} style={{maxHeight:520}}>
+          <Box p={4} flexGrow={1} overflowY="auto" ref={messagesListRef} style={{ maxHeight: 520 }}>
             {loadingMessages ? (
-              <div style={{textAlign:'center'}}><div>Loading...</div></div>
+              <div style={{ textAlign: 'center' }}><div>Loading...</div></div>
             ) : selectedConv ? (
-              <div style={{display:'flex', flexDirection:'column', gap:12}}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {messages.map((m) => {
                   const fromId = m.from || m.fromId || (m.sender && m.sender.id);
                   const isMine = !!user && fromId === (user.id || user?.id);
@@ -302,27 +301,27 @@ export default function Messages() {
                   const timeText = formatDateTime(m.createdAt || m.created_at || Date.now());
                   if (!isMine) {
                     return (
-                      <div key={m._id || m.id} onMouseEnter={() => setHoveredMessageId(m._id || m.id)} onMouseLeave={() => setHoveredMessageId(null)} style={{display:'flex', alignItems:'flex-start', gap:12,position:'relative'}}>
-                        <img alt={sender.name || 'User'} src={sender.image || ''} style={{width:32,height:32,borderRadius:16,objectFit:'cover',background:'#EEE'}} />
+                      <div key={m._id || m.id} onMouseEnter={() => setHoveredMessageId(m._id || m.id)} onMouseLeave={() => setHoveredMessageId(null)} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, position: 'relative' }}>
+                        <img alt={sender.name || 'User'} src={sender.image || ''} style={{ width: 32, height: 32, borderRadius: 16, objectFit: 'cover', background: '#EEE' }} />
                         <div>
-                          <div style={{fontSize:14,fontWeight:600}}>{sender.name || 'User'}</div>
-                          <div style={{background:'#EC4899',color:'#fff',padding:'12px 16px',borderRadius:14,minWidth:180,maxWidth:'70%',lineHeight:1.4,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',whiteSpace:'pre-wrap',wordBreak:'break-word'}}>
-                            <div style={{fontSize:15,marginBottom:6}}>{m.body || m.text || m.message || '(empty)'}</div>
-                              <div style={{display:'flex',alignItems:'center',gap:8}}>
-                                <div style={{fontSize:11,color:'#FFF',opacity:0.85,whiteSpace:'nowrap'}}>{timeText}</div>
+                          <div style={{ fontSize: 14, fontWeight: 600 }}>{sender.name || 'User'}</div>
+                          <div style={{ background: '#EC4899', color: '#fff', padding: '12px 16px', borderRadius: 14, minWidth: 180, maxWidth: '70%', lineHeight: 1.4, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            <div style={{ fontSize: 15, marginBottom: 6 }}>{m.body || m.text || m.message || '(empty)'}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ fontSize: 11, color: '#FFF', opacity: 0.85, whiteSpace: 'nowrap' }}>{timeText}</div>
                                 {hoveredMessageId === (m._id || m.id) && reportingMessageId !== (m._id || m.id) && (
-                                  <button onClick={() => setReportingMessageId(m._id || m.id)} style={{background:'transparent',border:'none',color:'#FCE7F3',cursor:'pointer',fontSize:12,textDecoration:'underline'}}>Report</button>
+                                  <button onClick={() => setReportingMessageId(m._id || m.id)} style={{ background: 'transparent', border: 'none', color: '#FCE7F3', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Report</button>
                                 )}
-                              </div>
+                            </div>
                           </div>
                         </div>
                         {reportingMessageId === (m._id || m.id) && (
-                          <div style={{display:'flex',gap:6,position:'absolute',right:0,top:40,zIndex:1000,background:'#fff',border:'1px solid #E5E7EB',borderRadius:8,padding:'6px 4px',boxShadow:'0 2px 8px rgba(0,0,0,0.1)'}}>
-                            <button onClick={() => reportMessage(m, 'user')} style={{background:'#F3F4F6',border:'1px solid #D1D5DB',padding:'6px 10px',borderRadius:5,cursor:'pointer',color:'#000',fontSize:11,whiteSpace:'nowrap',transition:'all 0.2s',fontWeight:500}}>Report User</button>
-                            {conversations.find(c => (c._id||c.id) === selectedConv)?.isGroup && (
-                              <button onClick={() => reportMessage(m, 'group')} style={{background:'#F3F4F6',border:'1px solid #D1D5DB',padding:'6px 10px',borderRadius:5,cursor:'pointer',color:'#000',fontSize:11,whiteSpace:'nowrap',transition:'all 0.2s',fontWeight:500}}>Report Group</button>
+                          <div style={{ display: 'flex', gap: 6, position: 'absolute', right: 0, top: 40, zIndex: 1000, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 4px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                            <button onClick={() => reportMessage(m, 'user')} style={{ background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '6px 10px', borderRadius: 5, cursor: 'pointer', color: '#000', fontSize: 11, whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 500 }}>Report User</button>
+                            {conversations.find(c => (c._id || c.id) === selectedConv || c._conversationId === selectedConv)?.isGroup && (
+                              <button onClick={() => reportMessage(m, 'group')} style={{ background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '6px 10px', borderRadius: 5, cursor: 'pointer', color: '#000', fontSize: 11, whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 500 }}>Report Group</button>
                             )}
-                            <button onClick={() => setReportingMessageId(null)} style={{background:'transparent',border:'1px solid #D1D5DB',color:'#6B7280',cursor:'pointer',fontSize:11,padding:'6px 10px',whiteSpace:'nowrap',borderRadius:5,transition:'all 0.2s'}}>Cancel</button>
+                            <button onClick={() => setReportingMessageId(null)} style={{ background: 'transparent', border: '1px solid #D1D5DB', color: '#6B7280', cursor: 'pointer', fontSize: 11, padding: '6px 10px', whiteSpace: 'nowrap', borderRadius: 5, transition: 'all 0.2s' }}>Cancel</button>
                           </div>
                         )}
                       </div>
@@ -330,23 +329,23 @@ export default function Messages() {
                   }
 
                   return (
-                    <div key={m._id || m.id} onMouseEnter={() => setHoveredMessageId(m._id || m.id)} onMouseLeave={() => setHoveredMessageId(null)} style={{display:'flex', flexDirection:'column', alignItems:'flex-end',position:'relative'}}>
-                        <div style={{background:'#F3F4F6',color:'#111',padding:'12px 16px',borderRadius:14,minWidth:180,maxWidth:'70%',lineHeight:1.4,boxShadow:'0 1px 2px rgba(0,0,0,0.04)',whiteSpace:'pre-wrap',wordBreak:'break-word'}}>
-                        <div style={{fontSize:15,marginBottom:6}}>{m.body || m.text || m.message || '(empty)'}</div>
-                          <div style={{display:'flex',alignItems:'center',gap:8}}>
-                            <div style={{fontSize:11,color:'#000',opacity:0.9,whiteSpace:'nowrap'}}>{timeText}</div>
-                            {hoveredMessageId === (m._id || m.id) && reportingMessageId !== (m._id || m.id) && (
-                              <button onClick={() => setReportingMessageId(m._id || m.id)} style={{background:'transparent',border:'none',color:'#6B7280',cursor:'pointer',fontSize:12,textDecoration:'underline'}}>Report</button>
-                            )}
-                          </div>
+                    <div key={m._id || m.id} onMouseEnter={() => setHoveredMessageId(m._id || m.id)} onMouseLeave={() => setHoveredMessageId(null)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', position: 'relative' }}>
+                      <div style={{ background: '#F3F4F6', color: '#111', padding: '12px 16px', borderRadius: 14, minWidth: 180, maxWidth: '70%', lineHeight: 1.4, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        <div style={{ fontSize: 15, marginBottom: 6 }}>{m.body || m.text || m.message || '(empty)'}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ fontSize: 11, color: '#000', opacity: 0.9, whiteSpace: 'nowrap' }}>{timeText}</div>
+                          {hoveredMessageId === (m._id || m.id) && reportingMessageId !== (m._id || m.id) && (
+                            <button onClick={() => setReportingMessageId(m._id || m.id)} style={{ background: 'transparent', border: 'none', color: '#6B7280', cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}>Report</button>
+                          )}
+                        </div>
                       </div>
                       {reportingMessageId === (m._id || m.id) && (
-                        <div style={{display:'flex',gap:6,position:'absolute',right:0,top:40,zIndex:1000,background:'#fff',border:'1px solid #E5E7EB',borderRadius:8,padding:'6px 4px',boxShadow:'0 2px 8px rgba(0,0,0,0.1)'}}>
-                          <button onClick={() => reportMessage(m, 'user')} style={{background:'#F3F4F6',border:'1px solid #D1D5DB',padding:'6px 10px',borderRadius:5,cursor:'pointer',color:'#000',fontSize:11,whiteSpace:'nowrap',transition:'all 0.2s',fontWeight:500}}>Report User</button>
-                          {conversations.find(c => (c._id||c.id) === selectedConv)?.isGroup && (
-                            <button onClick={() => reportMessage(m, 'group')} style={{background:'#F3F4F6',border:'1px solid #D1D5DB',padding:'6px 10px',borderRadius:5,cursor:'pointer',color:'#000',fontSize:11,whiteSpace:'nowrap',transition:'all 0.2s',fontWeight:500}}>Report Group</button>
-                          )}
-                          <button onClick={() => setReportingMessageId(null)} style={{background:'transparent',border:'1px solid #D1D5DB',color:'#6B7280',cursor:'pointer',fontSize:11,padding:'6px 10px',whiteSpace:'nowrap',borderRadius:5,transition:'all 0.2s'}}>Cancel</button>
+                        <div style={{ display: 'flex', gap: 6, position: 'absolute', right: 0, top: 40, zIndex: 1000, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 8, padding: '6px 4px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                          <button onClick={() => reportMessage(m, 'user')} style={{ background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '6px 10px', borderRadius: 5, cursor: 'pointer', color: '#000', fontSize: 11, whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 500 }}>Report User</button>
+                                {conversations.find(c => (c._id || c.id) === selectedConv || c._conversationId === selectedConv)?.isGroup && (
+                                  <button onClick={() => reportMessage(m, 'group')} style={{ background: '#F3F4F6', border: '1px solid #D1D5DB', padding: '6px 10px', borderRadius: 5, cursor: 'pointer', color: '#000', fontSize: 11, whiteSpace: 'nowrap', transition: 'all 0.2s', fontWeight: 500 }}>Report Group</button>
+                                )}
+                          <button onClick={() => setReportingMessageId(null)} style={{ background: 'transparent', border: '1px solid #D1D5DB', color: '#6B7280', cursor: 'pointer', fontSize: 11, padding: '6px 10px', whiteSpace: 'nowrap', borderRadius: 5, transition: 'all 0.2s' }}>Cancel</button>
                         </div>
                       )}
                     </div>
@@ -354,13 +353,13 @@ export default function Messages() {
                 })}
               </div>
             ) : (
-              <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100%'}}><div style={{color:'#6B7280'}}>Select a conversation to view messages.</div></div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><div style={{ color: '#6B7280' }}>Select a conversation to view messages.</div></div>
             )}
           </Box>
 
           <Box p={4} borderTop="1px solid" borderColor="gray.100">
             <HStack>
-              <Input placeholder="Type a message..." value={text} onChange={(e)=>setText(e.target.value)} onKeyDown={(e)=>{ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
+              <Input placeholder="Type a message..." value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
               <Button colorScheme="pink" onClick={handleSend} isLoading={sending}>Send</Button>
             </HStack>
           </Box>
