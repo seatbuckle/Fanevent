@@ -7,6 +7,7 @@ import Event from "../models/Event.js"; // adjust if your path/name differs
 import EventReminder from "../models/EventReminder.js";
 // 🔹 Clerk server SDK
 import { clerkClient as clerk } from "@clerk/express";
+import RSVP from "../models/RSVP.js";
 
 // ------------------------------------------------------------------
 // Inngest client
@@ -66,18 +67,26 @@ export const eventReminderOffsets = inngest.createFunction(
       if (!shouldFire) continue;
 
       docs.push({
-        userId: r.userId,
-        type: "EVENT_REMINDER",
-        data: {
-          eventId: ev._id,
-          eventTitle: ev.title,
-          message: `Reminder: “${ev.title}” starts in about ${minutesUntil} minutes.`,
-        },
-        link: `/events/${ev._id}`,
-        read: false,
-        createdAt: now,
-        updatedAt: now,
-      });
+      userId: uid,
+      type: "WEEKLY_DIGEST",           // name doesn’t really matter, just be consistent
+      data: {
+        title: "Weekly Digest",
+        message,                       // <-- THIS is a long, multi-line string we build
+        events: highlightEvents.map((ev) => ({
+          id: String(ev._id),
+          title: ev.title,
+          startAt: ev.startAt,
+          city: ev.city,
+          state: ev.state,
+        })),
+        weekOf: now.toISOString(),
+      },
+      link: "/events?dates=this week",
+      read: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
     }
 
     if (docs.length) {
@@ -335,41 +344,127 @@ const eventReminder = inngest.createFunction(
  * 3) Weekly digest (every Monday 8am PT ≈ 16:00 UTC, be mindful of DST)
  * This creates an in-app DIGEST; email is optional.
  */
+
 const weeklyDigest = inngest.createFunction(
   { id: "weekly-digest" },
-  { cron: "0 16 * * MON" }, // 08:00 PT ≈ 16:00 UTC (standard time)
+  { cron: "0 16 * * MON" }, // 08:00 PT ≈ 16:00 UTC
   async () => {
-    // Simple example: send everyone a generic digest.
-    // Replace with a per-user query of upcoming events they RSVP’d to or groups they joined.
-    const users = await User.find({}).select({ _id: 1, email: 1 }).lean();
-    if (!users.length) return { ok: true, users: 0 };
-
     const now = new Date();
-    const docs = users.map((u) => ({
-      userId: String(u._id),
-      type: "DIGEST",
-      data: {
-        title: "Weekly Digest",
-        message: "Here’s what’s coming up this week in your fandoms.",
-        weekOf: now.toISOString(),
-      },
-      read: false,
-      createdAt: now,
-      updatedAt: now,
-    }));
+    const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-    await Notification.collection.insertMany(docs);
+    // 1) Upcoming events in next 7 days
+    const upcomingEvents = await Event.find({
+      status: "approved",
+      startAt: { $gte: now, $lt: in7d },
+    })
+      .select({ _id: 1, title: 1, startAt: 1, city: 1, state: 1 })
+      .sort({ startAt: 1 })
+      .lean();
 
-    // Optional: email digests
-    // for (const u of users) {
-    //   if (u.email) {
-    //     await sendEmail({ to: u.email, subject: "Your weekly Fanevent digest", html: "<p>…</p>" });
-    //   }
-    // }
+    // Make a quick lookup by id
+    const eventById = Object.fromEntries(
+      upcomingEvents.map((e) => [String(e._id), e])
+    );
 
-    return { ok: true, users: users.length };
+    // 2) All RSVPs for those events in that window
+    const rsvps = await RSVP.find({
+      eventId: { $in: upcomingEvents.map((e) => e._id) },
+    })
+      .select({ userId: 1, eventId: 1 })
+      .lean();
+
+    // Map: userId -> [eventIds]
+    const eventsByUser = {};
+    for (const r of rsvps) {
+      const uid = String(r.userId);
+      if (!eventsByUser[uid]) eventsByUser[uid] = new Set();
+      eventsByUser[uid].add(String(r.eventId));
+    }
+
+    // 3) All users in the system
+    const users = await User.find({})
+      .select({ _id: 1, email: 1, name: 1 })
+      .lean();
+    if (!users.length) return { ok: true, users: 0, created: 0 };
+
+    const docs = [];
+
+    // Helper to format a list of events as lines
+    const formatEvents = (events) =>
+      events
+        .slice(0, 5)
+        .map((ev) => {
+          const when = new Date(ev.startAt).toLocaleDateString("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          });
+          const where = [ev.city, ev.state].filter(Boolean).join(", ");
+          return `• ${when} – ${ev.title}${where ? ` (${where})` : ""}`;
+        })
+        .join("\n");
+
+    // 4) Build one notification per user
+    for (const u of users) {
+      const uid = String(u._id);
+      const rsvpEventIds = Array.from(eventsByUser[uid] || []);
+      const rsvpEvents = rsvpEventIds
+        .map((id) => eventById[id])
+        .filter(Boolean);
+
+      let message;
+      let highlightEvents;
+
+      if (rsvpEvents.length) {
+        // Personalized – events they RSVP’d to this week
+        highlightEvents = rsvpEvents;
+        message =
+          "Here’s what you’ve got coming up this week:\n\n" +
+          formatEvents(rsvpEvents);
+      } else if (upcomingEvents.length) {
+        // Generic – top events this week
+        highlightEvents = upcomingEvents.slice(0, 5);
+        message =
+          "Here are some events happening this week you might like:\n\n" +
+          formatEvents(highlightEvents);
+      } else {
+        // Nothing in the next 7 days
+        highlightEvents = [];
+        message =
+          "Quiet week ahead — there aren’t any events in the next few days. Check back soon or explore all events.";
+      }
+
+      docs.push({
+        userId: uid,
+        type: "WEEKLY_DIGEST",
+        data: {
+          title: "Weekly Digest",
+          message,
+          events: highlightEvents.map((ev) => ({
+            id: String(ev._id),
+            title: ev.title,
+            startAt: ev.startAt,
+            city: ev.city,
+            state: ev.state,
+          })),
+          weekOf: now.toISOString(),
+        },
+        // Let “Open” go to this week’s events
+        link: "/events?dates=this week",
+        read: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (docs.length) {
+      await Notification.collection.insertMany(docs);
+    }
+
+    return { ok: true, users: users.length, created: docs.length };
   }
 );
+
 
 // ------------------------------------------------------------------
 // Export all functions

@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import { api } from "@/lib/api";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const {
   Box,
@@ -268,35 +269,44 @@ const Calendar = ({ rsvps }) => {
         </HStack>
 
         <HStack spacing={3}>
-          <HStack
-            spacing={2}
-            px={3}
-            py={1}
-            borderRadius="full"
-            bg="whiteAlpha.800"
-            borderWidth="1px"
-            borderColor="gray.100"
+        <HStack
+          spacing={2}
+          px={3}
+          py={1}
+          borderRadius="full"
+          bg="whiteAlpha.800"
+          borderWidth="1px"
+          borderColor="gray.100"
+        >
+          <Button
+            size="xs"
+            variant="ghost"
+            color="pink.500"
+            minW="auto"
+            px={2}
+            onClick={() => goMonth(-1)}
+            _hover={{ bg: "pink.50", color: "pink.600" }}
           >
-            <IconButton
-              size="xs"
-              variant="ghost"
-              colorScheme="pink"
-              aria-label="Previous month"
-              onClick={() => goMonth(-1)}
-              icon={<span>←</span>}
-            />
-            <Text fontSize="sm" fontWeight="medium">
-              {monthLabel}
-            </Text>
-            <IconButton
-              size="xs"
-              variant="ghost"
-              colorScheme="pink"
-              aria-label="Next month"
-              onClick={() => goMonth(1)}
-              icon={<span>→</span>}
-            />
-          </HStack>
+            ←
+          </Button>
+
+          <Text fontSize="sm" fontWeight="medium">
+            {monthLabel}
+          </Text>
+
+          <Button
+            size="xs"
+            variant="ghost"
+            color="pink.500"
+            minW="auto"
+            px={2}
+            onClick={() => goMonth(1)}
+            _hover={{ bg: "pink.50", color: "pink.600" }}
+          >
+            →
+          </Button>
+        </HStack>
+
 
           <Button
             size="xs"

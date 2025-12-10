@@ -6,6 +6,7 @@ import EventCard from "@/components/EventCard";
 import AdvancedSearchSheet from "@/components/AdvancedSearchModal";
 import ReportModal from "@/components/ui/ReportModal";
 import { useDisclosure } from '@chakra-ui/react';
+import BlurCircle from "@/components/BlurCircle";
 
 const normalize = (s) => (s || "").toString().toLowerCase();
 const cleanText = (s = "") => s.replace(/\s+/g, " ").trim();
@@ -162,6 +163,7 @@ const Events = () => {
   return (
     <Box pt="120px" pb={16} bg="gray.50" minH="100vh">
       <Box px={{ base: 6, md: 12, lg: 20, xl: 32 }} maxW="1400px" mx="auto">
+        <BlurCircle top="20px" right="-80px" />
         <Text fontSize="3xl" fontWeight="bold" mb={4} textAlign="center">
           All Events
         </Text>

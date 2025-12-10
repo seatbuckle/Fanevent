@@ -350,10 +350,12 @@ function RSVPCalendarMini({ rsvps, loading }) {
     </>
   );
 }
+
 function RecommendedEventsSection({ currentEventId, currentTags = [] }) {
   const navigate = useNavigate();
   const [recommended, setRecommended] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
 
   React.useEffect(() => {
     if (!currentEventId) return;
@@ -361,15 +363,27 @@ function RecommendedEventsSection({ currentEventId, currentTags = [] }) {
 
     const load = async () => {
       setLoading(true);
+      setError(null);
       try {
-        // adjust this endpoint if your backend uses a different path
         const res = await api(`/api/events/${currentEventId}/recommended`);
-        let items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+        console.log("recommended response", res); // 👀 debug
+
+        let items = Array.isArray(res?.items)
+          ? res.items
+          : Array.isArray(res)
+          ? res
+          : [];
+
         // don’t recommend the event you’re already on
         items = items.filter((ev) => String(ev._id) !== String(currentEventId));
-        if (!cancelled) setRecommended(items.slice(0, 3)); // show up to 3 like your mock
+
+        if (!cancelled) setRecommended(items.slice(0, 3)); // up to 3
       } catch (e) {
-        if (!cancelled) setRecommended([]);
+        console.error("recommended error", e);
+        if (!cancelled) {
+          setError("Failed to load recommended events");
+          setRecommended([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -382,12 +396,13 @@ function RecommendedEventsSection({ currentEventId, currentTags = [] }) {
   }, [currentEventId]);
 
   if (!currentEventId) return null;
-  if (!loading && !recommended.length) return null; // quiet if nothing to show
 
   const getLocationLabel = (ev) => {
     const parts = [ev.city, ev.state, ev.country, ev.locationName].filter(Boolean);
     return parts[0] || "Online";
   };
+
+  const hasItems = recommended && recommended.length > 0;
 
   return (
     <Box
@@ -418,11 +433,25 @@ function RecommendedEventsSection({ currentEventId, currentTags = [] }) {
         </Button>
       </Flex>
 
-      {loading ? (
+      {loading && (
         <Text fontSize="sm" color="gray.500">
           Finding similar events…
         </Text>
-      ) : (
+      )}
+
+      {!loading && error && (
+        <Text fontSize="sm" color="red.500">
+          {error}
+        </Text>
+      )}
+
+      {!loading && !error && !hasItems && (
+        <Text fontSize="sm" color="gray.500">
+          No similar events yet.
+        </Text>
+      )}
+
+      {!loading && !error && hasItems && (
         <>
           {/* header row */}
           <Grid
@@ -539,6 +568,10 @@ export default function EventDetails() {
   const [checkInTime, setCheckInTime] = useState(null);
   const [hoursLogged, setHoursLogged] = useState(null);
 
+  const [group, setGroup] = useState(null);
+  const [groupLoadError, setGroupLoadError] = useState(null);
+
+
   // chooser + modal payload (modal is controlled by payload presence)
   const [isChooserOpen, setIsChooserOpen] = useState(false);
   const [reportPayload, setReportPayload] = useState(null); // { type, id, name }
@@ -650,6 +683,44 @@ export default function EventDetails() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, user?.id]);
+
+    // Load group info for Hosted By section
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadGroup = async () => {
+      if (!event?.groupId) {
+        setGroup(null);
+        setGroupLoadError(null);
+        return;
+      }
+
+      try {
+        // adjust endpoint if your backend uses a different path
+        const g = await api(`/api/groups/${event.groupId}`).catch(() => null);
+        if (cancelled) return;
+
+        if (!g) {
+          setGroup(null);
+          setGroupLoadError("Group not found");
+        } else {
+          setGroup(g);
+          setGroupLoadError(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setGroup(null);
+          setGroupLoadError("Failed to load group");
+        }
+      }
+    };
+
+    loadGroup();
+    return () => {
+      cancelled = true;
+    };
+  }, [event?.groupId]);
+
 
 
   useEffect(() => {
@@ -1469,42 +1540,39 @@ export default function EventDetails() {
                   Hosted by
                 </Text>
 
-                <Flex align="center" gap={3} mb={3}>
-                  {/* Initials box */}
-                  <Box
-                    w="44px"
-                    h="44px"
-                    borderRadius="lg"
-                    bg="gray.100"
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    fontWeight="bold"
-                    color="gray.700"
-                  >
-                    {(() => {
-                      const name =
+                {group && event?.groupId ? (
+                  <Flex direction="column" align="center" gap={2} mb={3}>
+                  {/* Avatar */}
+                  {group.image ? (
+                    <ChakraImage
+                      src={group.image}
+                      alt={group.name}
+                      boxSize="56px"
+                      borderRadius="full"
+                      objectFit="cover"
+                      bg="gray.100"
+                    />
+                  ) : (
+                    <Box
+                      w="86px"
+                      h="86px"
+                      borderRadius="full"
+                      bg="gray.100"
+                      display="flex"
+                      alignItems="center"
+                      justifyContent="center"
+                      fontWeight="bold"
+                      color="gray.700"
+                    >
+                      {initials}
+                    </Box>
+                  )}
+
+                  {/* Name + link, centered & tight */}
+                  <Box textAlign="center">
+                    <Text fontWeight="semibold" mb={0}>
+                      {group.name ||
                         (event?.group && String(event.group)) ||
-                        (event?.groupName && String(event.groupName)) ||
-                        (event?.category && String(event.category)) ||
-                        "Group";
-
-                      const initials = name
-                        .trim()
-                        .split(/\s+/)
-                        .map((w) => w[0])
-                        .filter(Boolean)
-                        .slice(0, 2)
-                        .join("")
-                        .toUpperCase();
-
-                      return initials || "GR";
-                    })()}
-                  </Box>
-
-                  <Box>
-                    <Text fontWeight="semibold">
-                      {(event?.group && String(event.group)) ||
                         (event?.groupName && String(event.groupName)) ||
                         (event?.category && String(event.category)) ||
                         "Group"}
@@ -1515,6 +1583,7 @@ export default function EventDetails() {
                         variant="link"
                         colorScheme="blue"
                         size="sm"
+                        mt={0}
                         onClick={() => navigate(`/groups/${event.groupId}`)}
                       >
                         View group →
@@ -1522,9 +1591,26 @@ export default function EventDetails() {
                     )}
                   </Box>
                 </Flex>
+
+                ) : (
+                  // No group attached or group couldn't be found
+                  <Box>
+                    <Text fontWeight="semibold">No Group</Text>
+                    <Text fontSize="xs" color="gray.500" mt={1}>
+                      This event is not attached to a group.
+                    </Text>
+                  </Box>
+                )}
               </Box>
+
             </Box>
           </Flex>
+
+          <RecommendedEventsSection
+            currentEventId={event._id}
+            currentTags={event.tags}
+          />
+
         </Box>
       </Box>
 

@@ -4,6 +4,8 @@ import { Box, Text, Flex } from "@chakra-ui/react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import GroupCard from "@/components/GroupCard";
 import AdvancedSearchSheet from "@/components/AdvancedSearchModal";
+import BlurCircle from "@/components/BlurCircle";
+
 
 const normalize = (s) => (s || "").toString().toLowerCase();
 const cleanText = (s = "") => s.replace(/\s+/g, " ").trim();
@@ -106,6 +108,7 @@ const Groups = () => {
   return (
     <Box pt="120px" pb={16} bg="gray.50" minH="100vh">
       <Box px={{ base: 6, md: 12, lg: 20, xl: 62 }} maxW="1400px" mx="auto">
+        <BlurCircle top="20px" right="-80px" />
         <Text fontSize="3xl" fontWeight="bold" mb={4} textAlign="center">
           All Groups
         </Text>
