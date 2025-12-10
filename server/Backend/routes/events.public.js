@@ -1,17 +1,57 @@
 // server/routes/events.public.js
 import { Router } from "express";
 import Event from "../models/Event.js";
+import RSVP from "../models/RSVP.js";
+
 
 const r = Router();
 
 // GET /api/events  – list approved events
 r.get("/", async (req, res) => {
-  const events = await Event.find({ status: "approved" })
-    .sort({ startAt: 1 })
-    .limit(200)
-    .lean();
-  res.json(events);
+  try {
+    const events = await Event.find({ status: "approved" })
+      .sort({ startAt: 1 })
+      .lean();
+
+    if (!events.length) {
+      return res.json([]);
+    }
+
+    const eventIds = events.map((e) => e._id);
+
+    // Count RSVPs that are NOT canceled for those events
+    const rsvpCounts = await RSVP.aggregate([
+      {
+        $match: {
+          eventId: { $in: eventIds },
+          status: { $ne: "canceled" },
+        },
+      },
+      {
+        $group: {
+          _id: "$eventId",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const countMap = {};
+    for (const row of rsvpCounts) {
+      countMap[String(row._id)] = row.count;
+    }
+
+    const withCounts = events.map((ev) => ({
+      ...ev,
+      attendingCount: countMap[String(ev._id)] || 0,
+    }));
+
+    res.json(withCounts);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Failed to fetch events" });
+  }
 });
+
 
 // 🔥 GET /api/events/:id/recommended
 r.get("/:id/recommended", async (req, res) => {
@@ -75,9 +115,24 @@ r.get("/:id/recommended", async (req, res) => {
 
 // GET /api/events/:id – single event
 r.get("/:id", async (req, res) => {
-  const ev = await Event.findById(req.params.id);
-  if (!ev || ev.status === "rejected") return res.sendStatus(404);
-  res.json(ev);
+  try {
+    const event = await Event.findById(req.params.id).lean();
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    const attendingCount = await RSVP.countDocuments({
+      eventId: event._id,
+      status: { $ne: "canceled" }, // or status: "confirmed"
+    });
+
+    res.json({
+      ...event,
+      attendingCount,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: "Failed to fetch event" });
+  }
 });
+
 
 export default r;

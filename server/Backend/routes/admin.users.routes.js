@@ -19,14 +19,24 @@ router.get("/", requireAuth, requireRole("admin"), async (req, res) => {
       query: query || undefined,
     });
 
-    const items = (list?.data || []).map((u) => ({
-      _id: u.id,
-      name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username || u.id,
-      email: u.primaryEmailAddress?.emailAddress || (u.emailAddresses?.[0]?.emailAddress ?? ""),
-      role: u.publicMetadata?.role || "user",
-      status: u.banned ? "banned" : "active",
-      createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : null,
-    }));
+const items = (list?.data || []).map((u) => ({
+  _id: u.id,
+  name:
+    [u.firstName, u.lastName].filter(Boolean).join(" ") ||
+    u.username ||
+    u.id,
+  email:
+    u.primaryEmailAddress?.emailAddress ||
+    (u.emailAddresses?.[0]?.emailAddress ?? ""),
+  username: u.username || null,
+  image: u.imageUrl || null,           // 👈 THIS is the key line
+  role: u.publicMetadata?.role || "user",
+  status: u.banned ? "banned" : "active",
+  createdAt: u.createdAt
+    ? new Date(u.createdAt).toISOString()
+    : null,
+}));
+
 
     res.json(items);
   } catch (e) {

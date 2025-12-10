@@ -20,16 +20,22 @@ const EventCard = ({ event = {} }) => {
   }, [event.location, event.locationName, event.address, event.city, event.state, event.zipCode])
 
   // Accept attendeesCount/rsvpCount/attendees, or default 0
+  // Live attending count from API, with fallbacks
   const attendeesCount = (() => {
+    if (typeof event.attendingCount === "number") {
+      return event.attendingCount
+    }
+
     const x =
       event.attendees ??
       event.attendeesCount ??
       event.rsvpCount ??
       event.rsvps ??
       0
-    // If it's an array, use its length; otherwise coerce to number
+
     return Array.isArray(x) ? x.length : Number(x) || 0
   })()
+
 
   const formatDate = (dateString) => {
     const d = dateString ? new Date(dateString) : null

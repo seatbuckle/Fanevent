@@ -1850,17 +1850,29 @@ const notifyEventUpdated = async (eventId, title, attendeeIds = []) => {
                       >
                         <Flex justify="space-between" align="flex-start" gap={3}>
                           <HStack>
-                            <Box
-                              w="40px"
-                              h="40px"
-                              borderRadius="full"
-                              bg="gray.200"
-                              display="flex"
-                              alignItems="center"
-                              justifyContent="center"
-                            >
-                              👤
-                            </Box>
+                      <Box
+                        w="40px"
+                        h="40px"
+                        borderRadius="full"
+                        bg="gray.200"
+                        overflow="hidden"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        {user.image ? (
+                          <Image
+                            src={user.image}
+                            alt={user.name || "User avatar"}
+                            w="40px"
+                            h="40px"
+                            objectFit="cover"
+                          />
+                        ) : (
+                          <Text>👤</Text>
+                        )}
+                      </Box>
+
                             <Box>
                               <Text fontWeight="medium">
                                 {user.name || `User ${idx + 1}`}
@@ -1944,17 +1956,28 @@ const notifyEventUpdated = async (eventId, title, attendeeIds = []) => {
                       _hover={{ bg: "gray.50" }}
                     >
                       <HStack>
-                        <Box
-                          w="40px"
-                          h="40px"
-                          borderRadius="full"
-                          bg="gray.200"
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          👤
-                        </Box>
+                       <Box
+                        w="40px"
+                        h="40px"
+                        borderRadius="full"
+                        bg="gray.200"
+                        overflow="hidden"
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        {user.image ? (
+                          <Image
+                            src={user.image}
+                            alt={user.name || "User avatar"}
+                            w="40px"
+                            h="40px"
+                            objectFit="cover"
+                          />
+                        ) : (
+                          <Text>👤</Text>
+                        )}
+                      </Box>
                         <Box>
                           <Text fontWeight="medium">
                             {user.name || `User ${idx + 1}`}
